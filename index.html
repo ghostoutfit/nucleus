@@ -793,11 +793,12 @@
      THEME SWITCHER
      ======================================== */
   #qualitySelect {
-    background: #1a1428; color: rgba(255,255,255,0.85);
-    border: 1px solid rgba(255,255,255,0.2); border-radius: 4px;
+    background: rgba(10,8,20,0.6); color: rgba(255,255,255,0.28);
+    border: 1px solid rgba(255,255,255,0.07); border-radius: 4px;
     padding: 2px 4px; font-size: 12px; font-family: inherit; cursor: pointer;
   }
-  #qualitySelect:focus { outline: 1px solid rgba(255,100,100,0.5); }
+  #qualitySelect:focus { outline: 1px solid rgba(255,100,100,0.4); }
+  #qualitySelect:hover { color: rgba(255,255,255,0.55); border-color: rgba(255,255,255,0.18); }
   .theme-btn {
     width: 18px; height: 18px;
     border-radius: 50%;
@@ -822,11 +823,11 @@
   body.screenshot-mode #toolbar { background: rgba(255,255,255,0.38) !important; box-shadow: none !important; }
   body.screenshot-mode #toolbar,
   body.screenshot-mode #toolbar * {
-    color: #000 !important;
+    color: rgba(0,0,0,0.35) !important;
     text-shadow: none !important;
   }
   body.screenshot-mode #toolbar button {
-    border-color: #000 !important;
+    border-color: rgba(0,0,0,0.35) !important;
     box-shadow: none !important;
   }
   body.screenshot-mode #toolbar .tab-btn:not(.active) {
@@ -835,8 +836,8 @@
     background: transparent !important;
   }
   body.screenshot-mode #toolbar .tab-btn.active {
-    color: #000 !important;
-    border-color: #000 !important;
+    color: rgba(0,0,0,0.35) !important;
+    border-color: rgba(0,0,0,0.35) !important;
     background: rgba(0,0,0,0.06) !important;
   }
   body.screenshot-mode input[type="range"] {
@@ -860,9 +861,9 @@
     background: rgba(210,210,210,0.85) !important;
   }
   body.screenshot-mode #qualitySelect {
-    background: rgba(240,240,240,0.9) !important;
-    color: #000 !important;
-    border-color: rgba(0,0,0,0.25) !important;
+    background: rgba(220,220,220,0.5) !important;
+    color: rgba(0,0,0,0.35) !important;
+    border-color: rgba(0,0,0,0.12) !important;
   }
   body.screenshot-mode #forcePanel {
     background: rgba(255,255,255,0.96) !important;
@@ -871,11 +872,11 @@
   }
   body.screenshot-mode #forcePanel,
   body.screenshot-mode #forcePanel * {
-    color: #000 !important;
+    color: rgba(0,0,0,0.35) !important;
     text-shadow: none !important;
   }
   body.screenshot-mode #forcePanel button {
-    border-color: #000 !important;
+    border-color: rgba(0,0,0,0.35) !important;
     box-shadow: none !important;
   }
   /* Preserve educational color codes: electric = blue, strong = orange */
@@ -885,8 +886,8 @@
   body.screenshot-mode #forcePanelKey [style*="ffb946"] { color: #ffb946 !important; }
   body.screenshot-mode #showHideForces {
     background: transparent !important;
-    color: #000 !important;
-    border-color: #000 !important;
+    color: rgba(0,0,0,0.35) !important;
+    border-color: rgba(0,0,0,0.35) !important;
   }
   /* Time-slider scrub bar — match toolbar look */
   body.screenshot-mode #scrubBar {
@@ -896,14 +897,14 @@
   }
   body.screenshot-mode #scrubBar,
   body.screenshot-mode #scrubBar * {
-    color: #000 !important;
+    color: rgba(0,0,0,0.35) !important;
     text-shadow: none !important;
   }
   body.screenshot-mode #scrubBar button {
-    border-color: #000 !important;
+    border-color: rgba(0,0,0,0.35) !important;
     box-shadow: none !important;
   }
-  body.screenshot-mode #timeSlider { accent-color: #000 !important; }
+  body.screenshot-mode #timeSlider { accent-color: rgba(0,0,0,0.35) !important; }
   body.screenshot-mode img[alt="logo"] { display: none !important; }
 
   /* ========================================
