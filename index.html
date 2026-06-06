@@ -3,94 +3,4285 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nuclear Interactions</title>
+<title>Nuclear Simulation v11</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* ========================================
+     THEME VARIABLES  (default: Synthwave)
+     ======================================== */
+  :root {
+    --accent1:      #ff2d78;
+    --accent1-dim:  rgba(255,45,120,0.25);
+    --accent1-glow: rgba(255,45,120,0.55);
+    --accent2:      #1a6eff;
+    --accent2-dim:  rgba(26,110,255,0.18);
+    --accent2-glow: rgba(26,110,255,0.45);
+    --ui-bg:        rgba(8, 6, 24, 0.38);
+    --ui-border:    rgba(255,255,255,0.07);
+    --text-dim:     rgba(220,215,255,0.55);
+    --text-bright:  rgba(240,235,255,0.92);
+    --speck-color:  rgba(180,130,255,0.35);
+    --neutron-core: #b0b0c4;
+    --neutron-mid:  #70707f;
+    --neutron-edge: #383848;
+  }
+
+  /* ========================================
+     RESET & BASE
+     ======================================== */
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
-  html, body {
-    width: 100%;
-    height: 100%;
+  body {
+    background: #05040f;
+    color: var(--text-bright);
+    font-family: 'Lexend', sans-serif;
     overflow: hidden;
-    background: #000;
+    width: 100vw;
+    height: 100vh;
+  }
+  button, input, select, textarea {
+    font-family: 'Lexend', sans-serif;
   }
 
-  #bg {
+  /* ========================================
+     FULL-VIEWPORT CANVAS
+     ======================================== */
+  #main {
     position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: fill;
-    display: block;
+    top: 0; left: 0; right: 0;
+    bottom: 76px;  /* stop above scrubBar so the slider receives events */
+    z-index: 0;
   }
 
-  #title-container {
+  #canvas {
+    display: block;
+    cursor: default;
+  }
+
+  /* ========================================
+     TOOLBAR — floating glass overlay
+     ======================================== */
+  #toolbar {
     position: fixed;
-    inset: 80px;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 20px 10px;
+    background: var(--ui-bg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
   }
 
-  #title {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
+  .toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  #toolbar h1 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent1);
+    margin-right: 6px;
+    white-space: nowrap;
+    text-shadow: 0 0 12px var(--accent1-glow);
+  }
+
+  /* ========================================
+     SCRUB BAR — floating glass overlay at bottom
+     ======================================== */
+  #scrubBar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    height: 76px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 103px 0 16px;
+    background: var(--ui-bg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid var(--ui-border);
+    box-shadow: 0 -1px 0 var(--accent1-dim), 0 -4px 20px rgba(0,0,0,0.5);
+  }
+  #scrubBar .scrub-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  #timeSlider {
+    flex: 1;
+    height: 6px;
+    accent-color: var(--accent1);
+    cursor: pointer;
+    opacity: 0.8;
+  }
+  #timeSlider:disabled { opacity: 0.18; cursor: not-allowed; }
+
+  /* ========================================
+     PARTICLE FRAMES — borderless glass
+     ======================================== */
+  .particle-frame {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--ui-border);
+    border-radius: 10px;
+    box-shadow: 0 0 10px var(--accent1-dim), inset 0 0 8px rgba(0,0,0,0.3);
+    padding: 7px 14px 9px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .particle-frame-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ========================================
+     PARTICLE ICONS — canvas-drawn to match the sim exactly
+     ======================================== */
+  .particle-icon-canvas {
     display: block;
+    flex-shrink: 0;
   }
 
-  /* Overlay that JS sizes to match the actual displayed image rect */
-  #hotspots {
+  .particle-frame-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  /* ========================================
+     BUTTONS — full neon sign treatment
+     Inactive base: dead tube. Active variants: full tube + bloom.
+     ======================================== */
+  .btn {
+    padding: 4px 14px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    color: rgba(255,255,255,0.18);
+    box-shadow: none;
+    text-shadow: none;
+    white-space: nowrap;
+  }
+  .btn:hover {
+    color: rgba(255,255,255,0.38);
+    border-color: rgba(255,255,255,0.12);
+  }
+
+  /* accent1 neon (pink) — particle add, btn-neon1 */
+  .btn-neon1,
+  .particle-add-btn,
+  #neutronDecBtn,
+  #neutronIncBtn {
+    border-color: var(--accent1);
+    color: rgba(255,255,255,0.5);
+    background: var(--accent1-dim);
+    box-shadow:
+      inset 0 0 6px var(--accent1-dim),
+      0 0 2px var(--accent1),
+      0 0 8px var(--accent1),
+      0 0 18px var(--accent1-glow),
+      0 0 40px var(--accent1-dim),
+      0 0 70px var(--accent1-dim);
+    text-shadow:
+      0 0 4px rgba(255,255,255,0.5),
+      0 0 10px var(--accent1),
+      0 0 22px var(--accent1-glow),
+      0 0 44px var(--accent1-dim);
+  }
+  .btn-neon1:hover,
+  .particle-add-btn:hover,
+  #neutronDecBtn:hover,
+  #neutronIncBtn:hover {
+    background: var(--accent1-glow);
+    color: rgba(255,255,255,0.5);
+    box-shadow:
+      inset 0 0 10px var(--accent1-glow),
+      0 0 4px var(--accent1),
+      0 0 14px var(--accent1),
+      0 0 28px var(--accent1-glow),
+      0 0 60px var(--accent1-dim),
+      0 0 100px var(--accent1-dim);
+  }
+
+  /* accent2 neon (cyan/violet) — btn-neon2 only */
+  .btn-neon2 {
+    border-color: var(--accent2);
+    color: rgba(255,255,255,0.5);
+    background: var(--accent2-dim);
+    box-shadow:
+      inset 0 0 6px var(--accent2-dim),
+      0 0 2px var(--accent2),
+      0 0 8px var(--accent2),
+      0 0 18px var(--accent2-glow),
+      0 0 40px var(--accent2-dim),
+      0 0 70px var(--accent2-dim);
+    text-shadow:
+      0 0 4px rgba(255,255,255,0.5),
+      0 0 10px var(--accent2),
+      0 0 22px var(--accent2-glow),
+      0 0 44px var(--accent2-dim);
+  }
+  .btn-neon2:hover {
+    background: var(--accent2-glow);
+    color: rgba(255,255,255,0.5);
+    box-shadow:
+      inset 0 0 10px var(--accent2-glow),
+      0 0 4px var(--accent2),
+      0 0 14px var(--accent2),
+      0 0 28px var(--accent2-glow),
+      0 0 60px var(--accent2-dim),
+      0 0 100px var(--accent2-dim);
+  }
+
+  /* Go idle (▶) — accent2 themed */
+  #goBtn {
+    border-color: var(--accent2);
+    color: rgba(255,255,255,0.5);
+    background: var(--accent2-dim);
+    box-shadow:
+      inset 0 0 6px var(--accent2-dim),
+      0 0 2px var(--accent2),
+      0 0 8px var(--accent2),
+      0 0 18px var(--accent2-glow),
+      0 0 40px var(--accent2-dim),
+      0 0 70px var(--accent2-dim);
+    text-shadow:
+      0 0 4px rgba(255,255,255,0.5),
+      0 0 10px var(--accent2),
+      0 0 22px var(--accent2-glow),
+      0 0 44px var(--accent2-dim);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #goBtn:hover { background: var(--accent2-glow); }
+  /* Go running (❙ ❙) — red */
+  #goBtn.running {
+    border-color: #ff4040;
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,40,40,0.15);
+    box-shadow:
+      inset 0 0 6px rgba(255,40,40,0.2),
+      0 0 2px #ff4040,
+      0 0 8px #ff4040,
+      0 0 18px rgba(255,40,40,0.5),
+      0 0 40px rgba(255,40,40,0.2);
+    text-shadow: 0 0 4px rgba(255,255,255,0.5), 0 0 10px #ff4040, 0 0 22px rgba(255,80,80,0.6);
+  }
+  #goBtn.running:hover { background: rgba(255,40,40,0.3); }
+
+  /* Clear — accent2 themed */
+  #clearBtn {
+    border-color: var(--accent2);
+    color: rgba(255,255,255,0.5);
+    background: var(--accent2-dim);
+    box-shadow:
+      inset 0 0 6px var(--accent2-dim),
+      0 0 2px var(--accent2),
+      0 0 8px var(--accent2),
+      0 0 18px var(--accent2-glow),
+      0 0 40px var(--accent2-dim);
+    text-shadow:
+      0 0 4px rgba(255,255,255,0.5),
+      0 0 10px var(--accent2),
+      0 0 22px var(--accent2-glow);
+  }
+  #clearBtn:hover { background: var(--accent2-glow); }
+
+  /* Replay — same red as Stop */
+  #replayBtn {
+    border-color: #ff4040;
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,40,40,0.15);
+    box-shadow:
+      inset 0 0 6px rgba(255,40,40,0.2),
+      0 0 2px #ff4040,
+      0 0 8px #ff4040,
+      0 0 18px rgba(255,40,40,0.5),
+      0 0 40px rgba(255,40,40,0.2);
+    text-shadow: 0 0 4px rgba(255,255,255,0.5), 0 0 10px #ff4040, 0 0 22px rgba(255,80,80,0.6);
+  }
+  #replayBtn:hover { background: rgba(255,40,40,0.3); }
+  #replayBtn:disabled {
+    background: transparent;
+    border-color: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.18);
+    box-shadow: none;
+    text-shadow: none;
+    cursor: not-allowed;
+  }
+
+  /* Mini replay in scrub bar */
+  #scrubReplayBtn {
+    font-size: 32px;
+    border-color: #ff4040;
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,40,40,0.15);
+    box-shadow:
+      inset 0 0 4px rgba(255,40,40,0.2),
+      0 0 2px #ff4040,
+      0 0 8px rgba(255,40,40,0.5),
+      0 0 14px rgba(255,40,40,0.4);
+    text-shadow: 0 0 4px rgba(255,255,255,0.5), 0 0 8px #ff4040;
+  }
+  #scrubReplayBtn:hover { background: rgba(255,40,40,0.3); }
+  #scrubReplayBtn:disabled {
+    background: transparent;
+    border-color: rgba(255,255,255,0.06);
+    color: rgba(255,255,255,0.18);
+    box-shadow: none;
+    text-shadow: none;
+    cursor: not-allowed;
+  }
+
+
+  /* Go / Replay — squished symbol buttons */
+  #goBtn, #replayBtn { font-size: 24px; letter-spacing: 0; padding: 7px 0; width: 90px; line-height: 1; }
+
+  /* Neutron slider — grey to distinguish from sim speed/zoom */
+  #neutronSlider {
+    box-shadow: 0 0 4px rgba(160,160,185,0.35), 0 0 10px rgba(160,160,185,0.15);
+  }
+  #neutronSlider::-webkit-slider-thumb {
+    background: #9090a8;
+    box-shadow: 0 0 3px #9090a8, 0 0 8px rgba(150,150,180,0.5), 0 0 18px rgba(150,150,180,0.2);
+  }
+  #neutronSlider::-moz-range-thumb {
+    background: #9090a8;
+    box-shadow: 0 0 3px #9090a8, 0 0 8px rgba(150,150,180,0.5);
+  }
+
+  /* ========================================
+     CTRL BOXES — pink and blue bordered panels
+     ======================================== */
+  .ctrl-box-pink {
+    display: flex; align-items: center; align-self: stretch;
+    gap: 14px; padding: 10px 16px;
+    background: rgba(255,45,120,0.07);
+    border: 1px solid rgba(255,45,120,0.22);
+    border-radius: 12px;
+    position: relative;
+  }
+  .ctrl-box-blue {
+    display: flex; align-items: center; align-self: stretch;
+    gap: 18px; padding: 10px 16px;
+    background: var(--accent2-dim);
+    border: 1px solid var(--accent2);
+    border-radius: 12px;
+    position: relative;
+  }
+  .ctrl-box-label {
     position: absolute;
+    bottom: 100%;
+    margin-bottom: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    line-height: 1;
     pointer-events: none;
   }
+  .ctrl-box-label-pink {
+    right: 14px;
+    color: rgba(255,45,120,0.8);
+    text-shadow: 0 0 6px rgba(255,45,120,0.6), 0 0 16px rgba(255,45,120,0.3);
+  }
+  .ctrl-box-label-blue {
+    left: 14px;
+    color: var(--accent2);
+    opacity: 0.8;
+    text-shadow: 0 0 6px var(--accent2-glow), 0 0 16px var(--accent2-dim);
+  }
+  .ctrl-box-blue input[type="range"] { width: 150px; }
+  .ctrl-box-blue .slider-icon { font-size: 28px; }
+  .ctrl-box-blue .toggle-label { font-size: 13px; gap: 6px; }
+  .ctrl-box-blue .awheel-item { font-size: 13px; padding: 5px 14px; }
 
-  #hotspots a {
-    position: absolute;
-    pointer-events: all;
+  /* ========================================
+     SLIDERS — neon tube aesthetic
+     Track: dim line with a faint glow
+     Thumb: thin bright pill with bloom shadow
+     ======================================== */
+  /* Periodic table element buttons (nucleus tab only) */
+  .element-btn {
+    position: relative;
+    width: 38px;
+    height: 47px;
+    padding: 0;
+    border: 1px solid var(--accent1);
+    border-radius: 5px;
+    background: var(--accent1-dim);
     cursor: pointer;
-    /* Uncomment to debug hit zones: */
-    /* background: rgba(255,0,0,0.25); */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-transform: none;
+    box-shadow:
+      inset 0 0 6px var(--accent1-dim),
+      0 0 2px var(--accent1),
+      0 0 8px var(--accent1),
+      0 0 18px var(--accent1-glow),
+      0 0 40px var(--accent1-dim);
+    transition: all 0.2s;
+  }
+  .element-btn:hover {
+    background: var(--accent1-glow);
+    box-shadow:
+      inset 0 0 10px var(--accent1-glow),
+      0 0 4px var(--accent1),
+      0 0 14px var(--accent1),
+      0 0 28px var(--accent1-glow),
+      0 0 60px var(--accent1-dim);
+  }
+  .element-btn .el-num {
+    position: absolute;
+    top: 3px;
+    left: 4px;
+    font-size: 12px;
+    font-family: 'Lexend', sans-serif;
+    font-weight: 400;
+    line-height: 1;
+    color: rgba(255,255,255,0.55);
+    text-shadow: none;
+    letter-spacing: 0;
+  }
+  .element-btn .el-sym {
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.85);
+    text-shadow:
+      0 0 4px rgba(255,255,255,0.5),
+      0 0 10px var(--accent1),
+      0 0 22px var(--accent1-glow);
+    letter-spacing: 0;
+    line-height: 1;
+    margin-top: 10px;
+  }
+
+  #particleBtns .particle-add-btn {
+    width: 38px;
+    height: 47px;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.85);
+    text-shadow:
+      0 0 4px rgba(255,255,255,0.5),
+      0 0 10px var(--accent1),
+      0 0 22px var(--accent1-glow);
+  }
+
+  .neutron-slider-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+  .neutron-slider-wrap #neutronSlider {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .neutron-slider-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent2);
+    text-shadow: 0 0 6px var(--accent2-glow);
+    min-width: 2em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Shared track style for all range inputs */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.10);
+    box-shadow:
+      0 0 4px var(--accent2),
+      0 0 12px var(--accent2-glow),
+      0 0 28px var(--accent2-dim);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 26px;
+    border-radius: 3px;
+    background: var(--accent2);
+    border: none;
+    box-shadow:
+      0 0 3px var(--accent2),
+      0 0 10px var(--accent2-glow),
+      0 0 24px var(--accent2-dim),
+      0 0 44px var(--accent2-dim);
+    cursor: grab;
+    transition: box-shadow 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    box-shadow:
+      0 0 4px var(--accent2),
+      0 0 18px var(--accent2-glow),
+      0 0 40px var(--accent2-dim),
+      0 0 70px var(--accent2-dim);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 10px; height: 26px;
+    border-radius: 3px;
+    background: var(--accent2);
+    border: none;
+    box-shadow: 0 0 3px var(--accent2), 0 0 10px var(--accent2-glow), 0 0 24px var(--accent2-dim);
+    cursor: grab;
+  }
+
+  #neutronSlider { width: auto; }
+
+  /* ========================================
+     SLIDER GROUPS & TOGGLES
+     ======================================== */
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .slider-group label {
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0px;
+  }
+  .slider-group label span {
+    display: inline-block;
+    min-width: 3em;
+    text-align: right;
+    color: var(--accent2);
+    text-shadow: 0 0 5px var(--accent2-glow);
+  }
+  .slider-group input[type="range"] { width: 72px; }
+
+  .toggle-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .toggle-label input[type="checkbox"] { accent-color: var(--accent1); }
+
+  /* ========================================
+     SLIDER ICONS (turtle / rabbit / magnifier)
+     ======================================== */
+  .slider-icon {
+    font-size: 23px;
+    line-height: 1;
+    user-select: none;
+    filter:
+      brightness(0) invert(1)
+      blur(0.75px)
+      opacity(0.7)
+      drop-shadow(0 0 5px var(--accent2))
+      drop-shadow(0 0 14px var(--accent2))
+      drop-shadow(0 0 28px var(--accent2-glow))
+      drop-shadow(0 0 50px var(--accent2-glow))
+      drop-shadow(0 0 80px var(--accent2-glow));
+  }
+
+  /* ========================================
+     FIELD TOGGLE LABELS — neon text treatment
+     ======================================== */
+  .field-label-electric {
+    color: #46a5ff;
+    text-shadow:
+      0 0 4px #46a5ff,
+      0 0 10px rgba(70,165,255,0.5),
+      0 0 22px rgba(70,165,255,0.2);
+  }
+  .field-label-strong {
+    color: #ffb946;
+    text-shadow:
+      0 0 4px #ffb946,
+      0 0 10px rgba(255,185,70,0.5),
+      0 0 22px rgba(255,185,70,0.2);
+  }
+
+  /* ========================================
+     FORCE MODE BUTTONS — always-visible, gray/blue
+     ======================================== */
+  .force-mode-btn {
+    display: block;
+    padding: 3px 11px;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 5px;
+    background: transparent;
+    color: rgba(255,255,255,0.25);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: 0.4px;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .force-mode-btn:hover:not(.active) {
+    color: rgba(255,255,255,0.55);
+    border-color: rgba(255,255,255,0.28);
+  }
+  .force-mode-btn.active {
+    color: var(--accent2);
+    border-color: var(--accent2);
+    background: var(--accent2-dim);
+    box-shadow: 0 0 6px var(--accent2-glow);
+    text-shadow: 0 0 8px var(--accent2-glow);
+  }
+  .force-mode-btn.show-forces-large {
+    /* Default (blue/purple themes): solid filled */
+    background: var(--accent2);
+    color: rgba(255,255,255,0.95);
+    border-color: var(--accent2);
+    box-shadow: 0 0 10px var(--accent2-glow);
+    text-shadow: none;
+    padding: 28px 11px;
+    width: 100%;
+  }
+  /* Teal theme: use highlighted active look instead of solid fill */
+  body.theme-teal .force-mode-btn.show-forces-large {
+    background: var(--accent2-dim);
+    color: var(--accent2);
+    box-shadow: 0 0 6px var(--accent2-glow);
+    text-shadow: 0 0 8px var(--accent2-glow);
+  }
+
+  /* ========================================
+     FORCE PANEL — right-side overlay
+     ======================================== */
+  #forcePanel {
+    display: none;
+    position: fixed;
+    right: 0;
+    top: 200px;
+    border-radius: 12px 0 0 12px;
+    width: 480px;
+    background: rgba(8,6,24,0.90);
+    border: 1px solid var(--accent2);
+    border-radius: 12px;
+    z-index: 15;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 10px 10px 8px;
+    box-shadow: 0 0 24px var(--accent2-dim);
+    cursor: grab;
+    user-select: none;
+    min-width: 280px;
+    min-height: 280px;
+    overflow: visible;
+  }
+  #forcePanel:active { cursor: grabbing; }
+  /* Resize handles */
+  .fp-rh {
+    position: absolute;
+    z-index: 2;
+  }
+  .fp-rh:hover { background: var(--accent2-dim); border-radius: 3px; }
+  .fp-rh.n  { top:0; left:10px; right:10px; height:6px; cursor:n-resize; }
+  .fp-rh.s  { bottom:0; left:10px; right:10px; height:6px; cursor:s-resize; }
+  .fp-rh.e  { right:0; top:10px; bottom:10px; width:6px; cursor:e-resize; }
+  .fp-rh.w  { left:0; top:10px; bottom:10px; width:6px; cursor:w-resize; }
+  .fp-rh.nw { top:0; left:0; width:12px; height:12px; cursor:nw-resize; }
+  .fp-rh.ne { top:0; right:0; width:12px; height:12px; cursor:ne-resize; }
+  .fp-rh.sw { bottom:0; left:0; width:12px; height:12px; cursor:sw-resize; }
+  .fp-rh.se { bottom:0; right:0; width:12px; height:12px; cursor:se-resize; }
+  #forcePanelLabel { display: none; }
+  #forcePanelKey {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 7px;
+    font-size: 17px;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  #forcePanelKey span { display: flex; align-items: center; gap: 5px; }
+  #forcePanelCanvas { display: block; }
+
+  /* ========================================
+     TAB BAR
+     ======================================== */
+  #tabBar {
+    display: flex;
+    gap: 8px;
+    padding-bottom: 2px;
+  }
+  .tab-btn {
+    padding: 4px 14px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    color: rgba(255,255,255,0.18);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    box-shadow: none;
+    text-shadow: none;
+  }
+  a.tab-btn { text-decoration: none; cursor: pointer; }
+
+  .tab-btn:hover {
+    color: rgba(255,255,255,0.38);
+    border-color: rgba(255,255,255,0.12);
+  }
+  .tab-btn.active {
+    color: #e8e4ff;
+    border-color: #7b6fff;
+    background: rgba(123,111,255,0.12);
+    box-shadow:
+      inset 0 0 6px rgba(123,111,255,0.15),
+      0 0 2px #7b6fff,
+      0 0 8px #7b6fff,
+      0 0 18px rgba(123,111,255,0.5),
+      0 0 40px rgba(123,111,255,0.2),
+      0 0 70px rgba(123,111,255,0.1);
+    text-shadow:
+      0 0 4px #e8e4ff,
+      0 0 10px #7b6fff,
+      0 0 22px rgba(123,111,255,0.5),
+      0 0 44px rgba(123,111,255,0.2);
+  }
+
+  /* ========================================
+     THEME SWITCHER
+     ======================================== */
+  #qualitySelect {
+    background: rgba(10,8,20,0.5); color: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.04); border-radius: 4px;
+    padding: 2px 4px; font-size: 12px; font-family: inherit; cursor: pointer;
+  }
+  #qualitySelect:focus { outline: 1px solid rgba(255,100,100,0.4); }
+  #qualitySelect:hover { color: rgba(255,255,255,0.55); border-color: rgba(255,255,255,0.18); }
+  .theme-btn {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.12);
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+    box-shadow: none;
+  }
+  .theme-btn:hover { transform: scale(1.2); box-shadow: 0 0 8px rgba(255,255,255,0.3); }
+  .theme-btn.active {
+    border-color: rgba(255,255,255,0.55);
+    box-shadow: 0 0 6px rgba(255,255,255,0.4), 0 0 14px rgba(255,255,255,0.15);
+  }
+  #themeA { background: #1a6eff; }
+  #themeB { background: #bd00ff; }
+  #themeC { background: #00f5e0; }
+  #themeLight { background: #fff; }
+  #bgColorPicker { display:none; width:22px; height:22px; padding:2px; border-radius:4px; border:1px solid rgba(0,0,0,0.25); cursor:pointer; vertical-align:middle; margin-left:4px; }
+  body.screenshot-mode #bgColorPicker { display:inline-block; }
+  body.screenshot-mode #themeLight { display: none; }
+  body.screenshot-mode { background: var(--bg-color, #fff) !important; }
+  body.screenshot-mode #toolbar { background: rgba(255,255,255,0.38) !important; box-shadow: none !important; }
+  body.screenshot-mode #toolbar,
+  body.screenshot-mode #toolbar * {
+    color: #000 !important;
+    text-shadow: none !important;
+  }
+  body.screenshot-mode #toolbar button {
+    border-color: #000 !important;
+    box-shadow: none !important;
+  }
+  body.screenshot-mode #toolbar .tab-btn:not(.active) {
+    color: #888 !important;
+    border-color: #888 !important;
+    background: transparent !important;
+  }
+  body.screenshot-mode #toolbar .tab-btn.active {
+    color: #000 !important;
+    border-color: #000 !important;
+    background: rgba(0,0,0,0.06) !important;
+  }
+  body.screenshot-mode input[type="range"] {
+    box-shadow: none !important;
+    background: rgba(0,0,0,0.15) !important;
+  }
+  body.screenshot-mode input[type="range"]::-webkit-slider-thumb {
+    background: #000 !important;
+    box-shadow: none !important;
+  }
+  body.screenshot-mode input[type="range"]::-moz-range-thumb {
+    background: #000 !important;
+    box-shadow: none !important;
+  }
+  body.screenshot-mode .slider-icon {
+    filter: brightness(0) !important;
+    opacity: 1 !important;
+  }
+  body.screenshot-mode #bugReportBtn .slider-icon {
+    filter: drop-shadow(0 0 5px rgba(200,0,0,0.8)) drop-shadow(0 0 14px rgba(180,0,0,0.5)) !important;
+    background: rgba(210,210,210,0.85) !important;
+  }
+  body.screenshot-mode #qualitySelect {
+    background: rgba(220,220,220,0.5) !important;
+    color: rgba(0,0,0,0.35) !important;
+    border-color: rgba(0,0,0,0.12) !important;
+  }
+  body.screenshot-mode #forcePanel {
+    background: rgba(255,255,255,0.96) !important;
+    border-color: #000 !important;
+    box-shadow: none !important;
+  }
+  body.screenshot-mode #forcePanel,
+  body.screenshot-mode #forcePanel * {
+    color: #000 !important;
+    text-shadow: none !important;
+  }
+  body.screenshot-mode #forcePanel button {
+    border-color: #000 !important;
+    box-shadow: none !important;
+  }
+  /* Preserve educational color codes: electric = blue, strong = orange */
+  body.screenshot-mode .field-label-electric { color: #46a5ff !important; }
+  body.screenshot-mode .field-label-strong   { color: #ffb946 !important; }
+  body.screenshot-mode #forcePanelKey [style*="46a5ff"] { color: #46a5ff !important; }
+  body.screenshot-mode #forcePanelKey [style*="ffb946"] { color: #ffb946 !important; }
+  body.screenshot-mode #showHideForces {
+    background: transparent !important;
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+  /* Time-slider scrub bar — match toolbar look */
+  body.screenshot-mode #scrubBar {
+    background: rgba(255,255,255,0.38) !important;
+    border-top-color: rgba(0,0,0,0.15) !important;
+    box-shadow: none !important;
+  }
+  body.screenshot-mode #scrubBar,
+  body.screenshot-mode #scrubBar * {
+    color: #000 !important;
+    text-shadow: none !important;
+  }
+  body.screenshot-mode #scrubBar button {
+    border-color: #000 !important;
+    box-shadow: none !important;
+  }
+  body.screenshot-mode #timeSlider { accent-color: #000 !important; }
+  body.screenshot-mode img[alt="logo"] { display: none !important; }
+
+  /* ========================================
+     STATS & MISC
+     ======================================== */
+  #stats {
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+  }
+
+  /* ========================================
+  .cluster-inputs { display: flex; align-items: center; gap: 6px; }
+  .cluster-label {
+    font-size: 12px; color: var(--text-dim);
+    display: flex; align-items: center; gap: 3px; white-space: nowrap;
+  }
+  .cluster-label input[type="number"] {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--ui-border);
+    border-radius: 4px;
+    color: var(--text-bright);
+    padding: 3px 5px;
+    font-size: 12px;
+    width: 46px;
   }
 </style>
 </head>
 <body>
 
-<img id="bg" src="images/TitleFull.png" alt="">
 
-<div id="title-container">
-  <img id="title" src="images/TitleText.jpg" alt="Nuclear Interactions">
-  <div id="hotspots">
-    <a href="https://ghostoutfit.github.io/stability/"          style="top:34.3%;left:17.9%;width:66.9%;height:8.5%"></a>
-    <a href="https://ghostoutfit.github.io/stability/#nucleus"  style="top:44.4%;left:17.9%;width:66.9%;height:8.4%"></a>
-    <a href="https://ghostoutfit.github.io/fission/"            style="top:54.4%;left:17.9%;width:66.9%;height:8.6%"></a>
-    <a href="https://ghostoutfit.github.io/chain-reaction/"     style="top:64.6%;left:17.9%;width:66.9%;height:8.7%"></a>
-    <a href="https://ghostoutfit.github.io/fusion/#fusion"      style="top:74.5%;left:17.9%;width:66.9%;height:8.4%"></a>
-    <a href="https://ghostoutfit.github.io/fusion/"             style="top:84.5%;left:17.9%;width:66.9%;height:8.5%"></a>
+<!-- ========================================
+     TOOLBAR HTML
+     ======================================== -->
+<div id="toolbar">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <div id="tabBar">
+      <button class="tab-btn active" id="tabA">Protons</button>
+      <button class="tab-btn" id="tabB">Investigate Stability</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+      <select id="qualitySelect">
+        <option value="hi-res">Hi-res</option>
+        <option value="detailed">Detailed</option>
+        <option value="simple">Simple</option>
+      </select>
+      <button class="theme-btn active" id="themeA" title="Synthwave"></button>
+      <button class="theme-btn" id="themeB" title="Industrial"></button>
+      <button class="theme-btn" id="themeC" title="Neon Blue"></button>
+      <button class="theme-btn" id="themeLight" title="Light mode"></button>
+<input type="color" id="bgColorPicker" value="#ffffff" title="Background color">
+      <a id="bugReportBtn" title="Report a bug" style="cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;"><span class="slider-icon" style="background:white;border-radius:50%;padding:2px;filter:drop-shadow(0 0 5px rgba(255,50,50,0.95)) drop-shadow(0 0 14px rgba(255,30,30,0.7)) drop-shadow(0 0 28px rgba(220,0,0,0.45));">🐞</span></a>
+    </div>
+  </div>
+  <div class="toolbar-row" style="align-items:stretch;gap:12px">
+    <!-- GO + REPLAY + CLEAR — far left, bottom-aligned -->
+    <div style="display:flex;flex-direction:column;justify-content:flex-end;align-self:stretch;gap:6px;padding-bottom:10px">
+      <button class="btn" id="goBtn">&#9654; GO</button>
+      <button class="btn" id="replayBtn" disabled>&#8634;</button>
+      <button id="clearBtn" class="btn">Reset</button>
+    </div>
+
+    <!-- PINK BOX: stats/center | proton add buttons + neutron slider -->
+    <div class="ctrl-box-pink">
+      <span class="ctrl-box-label ctrl-box-label-pink">PARTICLES</span>
+      <!-- Left col: particle counts stacked + center button -->
+      <div style="display:flex;flex-direction:column;align-items:flex-start;gap:6px;align-self:center;min-width:120px">
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <span id="largestNucleusLabel" style="display:none;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:rgba(255,255,255,0.35);margin-bottom:1px;">Largest Nucleus:</span>
+          <span id="statProtons" style="color:var(--accent1);text-shadow:0 0 8px var(--accent1-glow)">Protons: 0</span>
+          <span id="statNeutrons" style="visibility:hidden;color:var(--neutron-core);text-shadow:0 0 8px var(--neutron-mid)">Neutrons: 0</span>
+        </div>
+        <label id="centerLabel" style="visibility:hidden;margin-top:4px;display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;color:var(--accent1);text-shadow:0 0 6px var(--accent1-glow);">
+          <input type="checkbox" id="centerChk" style="width:15px;height:15px;accent-color:var(--accent1);cursor:pointer;flex-shrink:0;">
+          Center
+        </label>
+      </div>
+      <!-- Right col: proton buttons + neutron row -->
+      <div style="display:flex;flex-direction:column;gap:8px;justify-content:center;align-self:stretch">
+        <div style="display:flex;align-items:center;gap:6px">
+          <canvas id="protonIconCanvas" class="particle-icon-canvas" width="40" height="40"></canvas>
+          <!-- Two rows: proton tab (numeric labels) and nucleus tab (element-symbol labels); applyTab() toggles which is visible -->
+          <div id="particleBtns" style="display:flex;gap:6px">
+            <button class="btn particle-add-btn" data-count="1">1</button>
+            <button class="btn particle-add-btn" data-count="2">2</button>
+            <button class="btn particle-add-btn" data-count="6">6</button>
+            <button class="btn particle-add-btn" data-count="10">10</button>
+            <button class="btn particle-add-btn" data-count="20">20</button>
+            <button class="btn particle-add-btn" data-count="36">36</button>
+          </div>
+          <div id="particleBtnsNucleus" style="display:none;gap:6px">
+            <button class="element-btn particle-add-btn" data-count="1"><span class="el-num">1</span><span class="el-sym">H</span></button>
+            <button class="element-btn particle-add-btn" data-count="2"><span class="el-num">2</span><span class="el-sym">He</span></button>
+            <button class="element-btn particle-add-btn" data-count="6"><span class="el-num">6</span><span class="el-sym">C</span></button>
+            <button class="element-btn particle-add-btn" data-count="10"><span class="el-num">10</span><span class="el-sym">Ne</span></button>
+            <button class="element-btn particle-add-btn" data-count="20"><span class="el-num">20</span><span class="el-sym">Ca</span></button>
+            <button class="element-btn particle-add-btn" data-count="36"><span class="el-num">36</span><span class="el-sym">Kr</span></button>
+          </div>
+        </div>
+        <div id="neutronFrame" style="display:flex;align-items:center;gap:6px;visibility:hidden;margin-top:5px">
+          <canvas id="neutronIconCanvas" class="particle-icon-canvas" width="40" height="40"></canvas>
+          <div class="neutron-slider-wrap">
+            <button id="neutronDecBtn" style="width:24px;height:24px;padding:0;font-size:12px;line-height:1;flex-shrink:0;">&#9664;</button>
+            <input type="range" id="neutronSlider" min="0" max="60" step="1" value="2">
+            <button id="neutronIncBtn" style="width:24px;height:24px;padding:0;font-size:12px;line-height:1;flex-shrink:0;">&#9654;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BLUE BOX: sliders + checkboxes | force mode buttons -->
+    <div class="ctrl-box-blue">
+      <span class="ctrl-box-label ctrl-box-label-blue">VISUALS</span>
+      <div style="display:flex;flex-direction:column;gap:10px;justify-content:space-evenly;align-self:stretch;flex:1;min-width:0">
+        <div class="slider-group">
+          <span class="slider-icon" title="Slow"><img src="images/Turtle.png" style="height:0.85em;vertical-align:middle;display:block"></span>
+          <input type="range" id="speedSlider" min="0" max="20" step="1" value="13">
+          <span class="slider-icon" title="Fast">🐇</span>
+        </div>
+        <div class="slider-group">
+          <span class="slider-icon" style="visibility:hidden"><img src="images/Turtle.png" style="height:0.85em;vertical-align:middle;display:block"></span>
+          <input type="range" id="zoomSlider" min="5" max="40" step="1" value="20">
+          <span class="slider-icon" title="Zoom">🔍</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label class="toggle-label"><input type="checkbox" id="electricFieldToggle" checked> <span class="field-label-electric">Show electric field</span></label>
+          <label class="toggle-label" id="strongFieldLabel"><input type="checkbox" id="strongFieldToggle" checked> <span class="field-label-strong">Show nuclear field</span></label>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;justify-content:flex-start;align-self:stretch">
+        <button id="showHideForces" class="force-mode-btn" style="min-width:142px">Show forces</button>
+        <div id="forceModeOptions" style="display:none;gap:6px;margin-top:2px">
+          <div id="forceModeSelCols" style="display:flex;flex-direction:column;gap:4px">
+            <button class="force-mode-btn active" data-selmode="single">One</button>
+            <button class="force-mode-btn" data-selmode="group">Group</button>
+          </div>
+          <div id="forceModeModeCols" style="display:flex;flex-direction:column;gap:4px">
+            <button class="force-mode-btn" data-mode="1">All Forces</button>
+            <button class="force-mode-btn" data-mode="2">Total Force</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
+<!-- FORCE PANEL — fixed right-side overlay, shown when force arrows are on -->
+<div id="forcePanel">
+  <div class="fp-rh nw" data-dir="nw"></div><div class="fp-rh ne" data-dir="ne"></div>
+  <div class="fp-rh sw" data-dir="sw"></div><div class="fp-rh se" data-dir="se"></div>
+  <div class="fp-rh n"  data-dir="n"></div><div class="fp-rh s" data-dir="s"></div>
+  <div class="fp-rh e"  data-dir="e"></div><div class="fp-rh w" data-dir="w"></div>
+  <div id="forcePanelLabel"></div>
+  <div id="forcePanelKey">
+    <span><span style="color:#46a5ff">■</span><span style="color:#46a5ff;text-shadow:0 0 4px #46a5ff,0 0 10px rgba(70,165,255,0.5)">Electric force</span></span>
+    <span id="forcePanelKeyStrong"><span style="color:#ffb946">■</span><span style="color:#ffb946;text-shadow:0 0 4px #ffb946,0 0 10px rgba(255,185,70,0.5)">Nuclear force</span></span>
+    <span style="display:inline-flex;align-items:center;gap:3px;margin-left:auto;">
+      <input type="range" id="fpZoomSlider" min="0.1" max="2.2" step="0.05" value="1" style="width:64px;cursor:pointer;" title="Zoom force panel">
+      <span class="slider-icon" style="font-size:18px;">🔍</span>
+    </span>
+  </div>
+  <canvas id="forcePanelCanvas" width="400" height="240"></canvas>
+</div>
+
+
+<!-- ========================================
+     MAIN CONTENT: Canvas
+     ======================================== -->
+<div id="main">
+  <canvas id="canvas"></canvas>
+
+
+</div>
+
+<div id="scrubBar">
+  <button id="scrubReplayBtn" class="btn" disabled>&#8634;</button>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+    <span class="slider-icon" style="font-size:32px"><img src="images/Stopwatch.png" style="height:1em;vertical-align:middle;display:block"></span>
+    <div id="frameCounter" style="font-size:9px;color:rgba(180,180,220,0.5);text-align:center;line-height:1;"></div>
+  </div>
+  <input type="range" id="timeSlider" min="0" max="0" value="0" disabled>
+
+</div>
+<img src="images/logo-placeholder.png" alt="logo" style="position:fixed;bottom:5px;right:5px;z-index:25;height:60px;width:auto;border-radius:4px 0 0 0;opacity:0;display:block;">
+
 <script>
+// ============================================================
+//  DOM ELEMENT REFERENCES
+// ============================================================
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const goBtn = document.getElementById('goBtn');
+const replayBtn = document.getElementById('replayBtn');
+const scrubReplayBtn = document.getElementById('scrubReplayBtn');
+const frameCounterEl = document.getElementById('frameCounter');
+function updateFrameCounter(current, total) {
+  frameCounterEl.textContent = current != null ? `${current} / ${total}` : total;
+}
+const speedSlider = document.getElementById('speedSlider');
+const zoomSlider  = document.getElementById('zoomSlider');
+const statProtons = document.getElementById('statProtons');
+const statNeutrons = document.getElementById('statNeutrons');
+const timeSlider  = document.getElementById('timeSlider');
+const protonIconCanvas  = document.getElementById('protonIconCanvas');
+const neutronIconCanvas = document.getElementById('neutronIconCanvas');
+
+// ============================================================
+//  SIMULATION STATE
+//  All mutable state lives here. Particles are plain objects:
+//  { x, y, vx, vy, type: 'proton'|'neutron' }
+// ============================================================
+let particles = [];
+let running = false;
+let _quality = 'hi-res';  // 'hi-res' | 'detailed' | 'simple'
+let animId = null;
+
+// ── Perf / lag detection ──────────────────────────────────────────────────────
+let _lagEma = 0, _lagDetected = false, _lagSkip = 0;
+let speed = 1.5;  // Internal dt per frame (display speed = speed * 2)
+let recordedSpeed = 1.5;  // speed at which the current recording was made; used to normalise replay rate
+
+// ---- Time scrubber ----
+const MAX_HISTORY = 4000;
+// Ring buffer for particle history (fixes O(n) shift and per-frame object allocation).
+// Each slot holds {n, data: Float32Array} where data = [x,y,vx,vy,type(0/1), ...] per particle.
+const _histBuf = new Array(MAX_HISTORY);
+let _histHead = 0;   // index of the oldest entry in _histBuf
+let _histLen  = 0;   // number of valid entries
+// Compact helpers so call sites can use a particleHistory-like API:
+// particleHistory.length  → _histLen
+// particleHistory[idx]    → _histGet(idx)   (0 = oldest)
+// particleHistory.push()  → _histPush(frame)
+// particleHistory = []    → _histReset()
+function _histGet(idx) { return _histBuf[(_histHead + idx) % MAX_HISTORY]; }
+function _histReset() { _histHead = 0; _histLen = 0; }
+function _histPush(frame) {
+  if (_histLen < MAX_HISTORY) {
+    _histBuf[(_histHead + _histLen) % MAX_HISTORY] = frame;
+    _histLen++;
+  } else {
+    // Buffer full: overwrite oldest slot and advance head
+    _histBuf[_histHead] = frame;
+    _histHead = (_histHead + 1) % MAX_HISTORY;
+  }
+}
+// Snapshot helpers: serialize particles to a compact typed buffer (avoids N object allocations per frame).
+const HIST_FIELDS = 5; // x, y, vx, vy, type(0=proton,1=neutron)
+function _snapshotParticles(ps) {
+  const n = ps.length;
+  const data = new Float32Array(n * HIST_FIELDS);
+  for (let i = 0; i < n; i++) {
+    const p = ps[i], o = i * HIST_FIELDS;
+    data[o]   = p.x;
+    data[o+1] = p.y;
+    data[o+2] = p.vx;
+    data[o+3] = p.vy;
+    data[o+4] = p.type === 'proton' ? 0 : 1;
+  }
+  return { n, data };
+}
+function _restoreParticles(frame) {
+  const { n, data } = frame;
+  const ps = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const o = i * HIST_FIELDS;
+    ps[i] = { x: data[o], y: data[o+1], vx: data[o+2], vy: data[o+3],
+               type: data[o+4] === 0 ? 'proton' : 'neutron' };
+  }
+  return ps;
+}
+let scrubFrame = -1;
+let replaying = false;  // true while auto-playing back recorded history
+let replayAccum = 0;    // fractional frame accumulator for speed-slider-controlled playback
+
+// ---- Visualization toggles ----
+let showElectricField = true;   // Toggle for Coulomb heatmap
+let showStrongField = true;     // Toggle for strong nuclear heatmap
+
+const antispin = true;            // Always on; suppresses runaway cluster spin
+
+// ---- Selection & force arrows ----
+let selectedParticle = null;  // Index of the clicked particle
+let arrowMode = 0;            // 0=off, 1=per-source arrows, 2=net force arrow
+let groupSelectMode = false;  // drag-to-select-group mode
+let selectedGroup = [];       // particle indices in the current group selection
+let selBox = null;            // rubber-band rect while dragging { x1,y1,x2,y2 } world coords
+let currentTabIsProton = true; // true = Tab A (protons only)
+let currentTab = 'proton';    // 'proton' | 'nucleus'
+
+// ── Action log (for bug reports) ─────────────────────────────────────────────
+const actionLog = [];
+function logAction(msg) {
+  actionLog.push(msg);
+  if (actionLog.length > 25) actionLog.shift();
+}
+
+// ============================================================
+//  QUANTUM: NUCLEAR STABILITY + NEUTRON DECAY CASCADE
+// ============================================================
+// Per-element stability data: minN, maxN, and strong force applied when N < minN
+const NUCLEUS_TABLE = {
+   1: { minN:  0, maxN:  2, strong: 0.14 },
+   2: { minN:  1, maxN:  2, strong: 0.14 },
+   3: { minN:  3, maxN:  4, strong: 0.14 },
+   4: { minN:  5, maxN:  6, strong: 0.14 },
+   5: { minN:  5, maxN:  6, strong: 0.14 },
+   6: { minN:  5, maxN:  8, strong: 0.14 },
+   7: { minN:  6, maxN:  8, strong: 0.14 },
+   8: { minN:  6, maxN: 10, strong: 0.14 },
+   9: { minN:  8, maxN: 10, strong: 0.14 },
+  10: { minN: 10, maxN: 12, strong: 0.14 },
+  11: { minN: 11, maxN: 14, strong: 0.30 },
+  12: { minN: 12, maxN: 16, strong: 0.20 },
+  13: { minN: 13, maxN: 16, strong: 0.20 },
+  14: { minN: 14, maxN: 18, strong: 0.25 },
+  15: { minN: 15, maxN: 18, strong: 0.25 },
+  16: { minN: 16, maxN: 22, strong: 0.25 },
+  17: { minN: 18, maxN: 23, strong: 0.25 },
+  18: { minN: 18, maxN: 26, strong: 0.25 },
+  19: { minN: 19, maxN: 27, strong: 0.25 },
+  20: { minN: 20, maxN: 29, strong: 0.25 },
+  21: { minN: 22, maxN: 29, strong: 0.25 },
+  22: { minN: 22, maxN: 30, strong: 0.25 },
+  23: { minN: 24, maxN: 30, strong: 0.25 },
+  24: { minN: 24, maxN: 32, strong: 0.25 },
+  25: { minN: 26, maxN: 32, strong: 0.25 },
+  26: { minN: 26, maxN: 36, strong: 0.25 },
+  27: { minN: 28, maxN: 35, strong: 0.25 },
+  28: { minN: 28, maxN: 38, strong: 0.25 },
+  29: { minN: 30, maxN: 40, strong: 0.25 },
+  30: { minN: 30, maxN: 44, strong: 0.25 },
+  31: { minN: 33, maxN: 44, strong: 0.25 },
+  32: { minN: 34, maxN: 46, strong: 0.25 },
+  33: { minN: 35, maxN: 46, strong: 0.25 },
+  34: { minN: 36, maxN: 50, strong: 0.25 },
+  35: { minN: 37, maxN: 50, strong: 0.25 },
+  36: { minN: 38, maxN: 50, strong: 0.25 },
+};
+function maxStableNeutrons(z) {
+  if (z <= 0) return 0;
+  return NUCLEUS_TABLE[z] ? NUCLEUS_TABLE[z].maxN : Math.floor(z * 1.5);
+}
+function minStableNeutrons(z) {
+  if (z <= 0) return 0;
+  return NUCLEUS_TABLE[z] ? NUCLEUS_TABLE[z].minN : 0;
+}
+
+const QUANTUM_ESCAPE_SPEED = 4.0;  // px/frame for ejected neutron
+const COHESION_K = 0.004;          // Spring constant toward cluster CM (Quantum tab only)
+let quantumEjectAt      = null;    // performance.now() when next ejection fires
+let quantumTimerStartAt = null;    // when current timer began
+let loopFrame           = 0;       // increments each live physics frame
+let stabilityCheckFrame = null;    // loopFrame value at which to re-evaluate biggest cluster
+let quantumFlashes      = [];      // [{x,y,startTime}] brief ejection flashes
+
+function ejectDelayRange(excessRatio) {
+  if (excessRatio >= 4) return [ 20,  50];
+  if (excessRatio >= 3) return [ 50, 100];
+  if (excessRatio >= 2) return [100, 200];
+  if (excessRatio >= 1) return [200, 400];
+  return                       [400, 800];
+}
+
+function ejectCount(excessRatio) {
+  if (excessRatio >= 4) return 4;
+  if (excessRatio >= 3) return 3;
+  if (excessRatio >= 2) return 2;
+  return 1;
+}
+
+function updateQuantumStability() {
+  if (currentTab !== 'nucleus') return;
+
+  for (const p of particles) {
+    if (!p.ejected) { p.unstable = false; p.strongScale = 1.0; }
+  }
+
+  // Evaluate each cluster independently; cache each cluster's CM on its particles
+  // so step() can apply the cohesion spring without re-clustering every substep.
+  const clusters = findAllClusters();
+  for (const cluster of clusters) {
+    let cmx = 0, cmy = 0;
+    for (const p of cluster) { cmx += p.x; cmy += p.y; }
+    cmx /= cluster.length; cmy /= cluster.length;
+    for (const p of cluster) { p.clusterCmx = cmx; p.clusterCmy = cmy; }
+  }
+
+  let maxExcessRatio = 0;
+  const unstableClusters = [];
+
+  for (const cluster of clusters) {
+    const Z       = cluster.filter(p => p.type === 'proton').length;
+    const neutrons = cluster.filter(p => p.type === 'neutron');
+    const excess  = neutrons.length - maxStableNeutrons(Z);
+    if (excess <= 0) continue;
+
+    const excessRatio = Z > 0 ? excess / Z : excess;
+    if (excessRatio > maxExcessRatio) maxExcessRatio = excessRatio;
+
+    let cx = 0, cy = 0;
+    for (const p of cluster) { cx += p.x; cy += p.y; }
+    cx /= cluster.length; cy /= cluster.length;
+
+    const protons = cluster.filter(p => p.type === 'proton');
+    const sorted = neutrons.map(p => {
+      let nearestDist = Infinity;
+      for (const pr of protons) {
+        const d = Math.hypot(p.x - pr.x, p.y - pr.y);
+        if (d < nearestDist) nearestDist = d;
+      }
+      if (!isFinite(nearestDist)) nearestDist = Math.hypot(p.x - cx, p.y - cy);
+      return { p, d: nearestDist };
+    }).sort((a, b) => b.d - a.d);
+
+    for (let i = 0; i < excess; i++) {
+      sorted[i].p.unstable    = true;
+      sorted[i].p.strongScale = 0.2;
+    }
+
+    unstableClusters.push({ cluster, sorted, excess, excessRatio, cx, cy });
+  }
+
+  if (unstableClusters.length === 0) {
+    quantumEjectAt = quantumTimerStartAt = null;
+    return;
+  }
+
+  const now = performance.now();
+  if (quantumEjectAt === null) {
+    const [lo, hi] = ejectDelayRange(maxExcessRatio);
+    quantumTimerStartAt = now;
+    quantumEjectAt      = now + lo + Math.random() * (hi - lo);
+  } else if (now >= quantumEjectAt) {
+    // Eject from every unstable cluster simultaneously
+    for (const { cluster, sorted, excessRatio, cx, cy } of unstableClusters) {
+      const count   = Math.min(ejectCount(excessRatio), sorted.length);
+      const targets = sorted.slice(0, count).map(s => s.p);
+      let totalRecoilVx = 0, totalRecoilVy = 0;
+
+      for (const target of targets) {
+        const dx = target.x - cx, dy = target.y - cy;
+        const d  = Math.sqrt(dx * dx + dy * dy);
+        const nx = d > 0.01 ? dx / d : Math.random() * 2 - 1;
+        const ny = d > 0.01 ? dy / d : Math.random() * 2 - 1;
+        target.vx = nx * QUANTUM_ESCAPE_SPEED;
+        target.vy = ny * QUANTUM_ESCAPE_SPEED;
+        target.ejected = true; target.unstable = false; target.strongScale = 0;
+        delete target.clusterCmx; delete target.clusterCmy;
+        totalRecoilVx -= target.vx; totalRecoilVy -= target.vy;
+        quantumFlashes.push({ x: target.x, y: target.y, startTime: now });
+      }
+
+      const remaining = cluster.filter(p => !p.ejected);
+      if (remaining.length > 0) {
+        const rvx = totalRecoilVx / remaining.length;
+        const rvy = totalRecoilVy / remaining.length;
+        for (const p of remaining) { p.vx += rvx; p.vy += rvy; }
+      }
+    }
+    quantumEjectAt = quantumTimerStartAt = null;
+  }
+}
+
+// Cached result of findBiggestCluster() — set by applyBiggestClusterStability() each
+// frame so updateStats() can reuse it without a second O(n²) traversal (issue #44).
+let _cachedBiggestCluster = null;
+
+// Watch the biggest cluster; if N < minN for its Z, drop strong force to the
+// table value and re-evaluate after 5 frames to let loose particles drift away.
+function applyBiggestClusterStability() {
+  if (currentTab !== 'nucleus') return;
+
+  if (stabilityCheckFrame !== null) {
+    if (loopFrame < stabilityCheckFrame) return;
+    stabilityCheckFrame = null;
+  }
+
+  const cluster = findBiggestCluster();
+  _cachedBiggestCluster = cluster;
+  if (cluster.length === 0) return;
+
+  const Z = cluster.filter(p => p.type === 'proton').length;
+  const N = cluster.filter(p => p.type === 'neutron').length;
+  const row = NUCLEUS_TABLE[Z];
+  if (!row) return;
+
+  if (N < row.minN) {
+    strongForceStrength = row.strong;
+    stabilityCheckFrame = loopFrame + 5;
+  } else if (N <= row.maxN) {
+    // Stable isotope range — snap strong force to 1
+    if (strongForceStrength !== 1) strongForceStrength = 1;
+  } else if (strongForceStrength !== strongForceBaseline) {
+    strongForceStrength = strongForceBaseline;
+  }
+}
+
+// ---- View ----
+let zoom = 2.0;  // Canvas zoom centered on canvas midpoint
+
+// ---- Sizing ----
+const PARTICLE_RADIUS = 10;  // px — display radius and physics hard-sphere radius
+const MIN_DIST = 20;         // Minimum distance for force calc = 2*PARTICLE_RADIUS (softening floor)
+
+// ============================================================
+//  PHYSICS PARAMETERS
+//  These are fixed — changing them changes the whole character
+//  of the simulation (equilibrium distance, fusion threshold, etc.)
+// ============================================================
+const coulombStrength = 139;      // K in F = K/r² (Coulomb repulsion, proton-proton only)
+let strongForceStrength = 0.6;    // Constant attractive force magnitude within cutoff
+let strongForceBaseline = 0.6;    // Stable baseline; stability logic restores to this
+let strongForceRange = 1.2;       // Cutoff = PARTICLE_RADIUS * 2 * strongForceRange
+const COULOMB_CUTOFF_SQ = (PARTICLE_RADIUS * 40) ** 2;  // 400px — Coulomb force negligible beyond this
+const equilibriumRatio = 0.6;     // Ratio r_eq / r_cutoff (informational, not used directly)
+const damping = 1.00;             // Velocity multiplier per frame; 1.0 = no damping
+const SUBSTEPS = 20;              // Physics substeps per animation frame for integration accuracy
+
+
+// ============================================================
+//  HEATMAP OFFSCREEN CANVAS (half resolution for performance)
+// ============================================================
+const hmCanvas = document.createElement('canvas');
+const hmCtx = hmCanvas.getContext('2d');
+
+// Composite canvas: holds the fully-blended heatmap at full resolution.
+// Cached between frames so we can skip recomputation every other frame.
+const hmComposite = document.createElement('canvas');
+const hmcCtx = hmComposite.getContext('2d');
+
+// Pre-allocated pixel buffers; resized when canvas dimensions change.
+let hmW = 0, hmH = 0;
+let hmDataElec = null, hmDataStrong = null;
+let hmImgElec  = null, hmImgStrong  = null;
+let hmFrameCounter = 0;
+
+function ensureHmBuffers(w, h) {
+  if (hmW === w && hmH === h) return;
+  hmW = w; hmH = h;
+  hmCanvas.width = w; hmCanvas.height = h;
+  hmDataElec   = new Uint8ClampedArray(w * h * 4);
+  hmDataStrong = new Uint8ClampedArray(w * h * 4);
+  hmImgElec    = new ImageData(hmDataElec,   w, h);
+  hmImgStrong  = new ImageData(hmDataStrong, w, h);
+}
+
+// ============================================================
+//  DRAG STATE
+// ============================================================
+let dragging = null;       // Index of particle being dragged, or null
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+
+// ============================================================
+//  LAYOUT / RESIZE
+// ============================================================
+function resize() {
+  const scrubH = document.getElementById('scrubBar').offsetHeight;
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight - scrubH;
+  _forcePanelWidth = forcePanelEl.offsetWidth;
+  updateCam();
+  if (!running) draw();
+}
+window.addEventListener('resize', resize);
+setTimeout(resize, 0);
+
+// ============================================================
+//  PARTICLE HELPERS: create, position, hit-test
+// ============================================================
+function createParticle(x, y, type) {
+  return { x, y, vx: 0, vy: 0, type: type || 'proton' };
+}
+
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  // Invert the centered zoom + camera transform applied in draw()
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  return { x: (sx - camX - cx) / zoom + cx, y: (sy - camY - cy) / zoom + cy };
+}
+
+function findParticleAt(x, y) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    const dx = p.x - x;
+    const dy = p.y - y;
+    if (dx * dx + dy * dy <= (PARTICLE_RADIUS + 4) * (PARTICLE_RADIUS + 4)) {  // +4px hit margin
+      return i;
+    }
+  }
+  return -1;
+}
+
+// ============================================================
+//  OVERLAP RESOLUTION
+//  Iterative position-correction pass: push overlapping pairs
+//  apart by half the overlap distance, up to 10 iterations.
+//  Used after placing or adding particles, not during physics
+//  (the physics step handles collisions with its own constraint).
+// ============================================================
+function separateOverlaps() {
+  const minSep = PARTICLE_RADIUS * 2;
+  for (let iter = 0; iter < 10; iter++) {
+    let moved = false;
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const a = particles[i];
+        const b = particles[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minSep && dist > 0) {
+          const overlap = (minSep - dist) / 2;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          a.x -= nx * overlap;
+          a.y -= ny * overlap;
+          b.x += nx * overlap;
+          b.y += ny * overlap;
+          moved = true;
+        } else if (dist === 0) {
+          b.x += (Math.random() - 0.5) * minSep;
+          b.y += (Math.random() - 0.5) * minSep;
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+}
+
+// ============================================================
+//  CANVAS MOUSE EVENTS
+//  mousedown  — start dragging an existing particle (or deselect)
+//  mousemove  — drag particle / initiate bucket drag once threshold met
+//  mouseup    — drop particle; delete if released over trash can
+//  click      — place a new particle of the selected type on empty space
+//  didDrag flag prevents click from firing after a drag release
+// ============================================================
+let didDrag = false;
+canvas.addEventListener('mousedown', (e) => {
+  const pos = getCanvasPos(e);
+  didDrag = false;
+  const idx = findParticleAt(pos.x, pos.y);
+  if (idx >= 0) {
+    // Hovering a particle — drag it regardless of mode
+    dragging = idx;
+    dragOffsetX = particles[idx].x - pos.x;
+    dragOffsetY = particles[idx].y - pos.y;
+    particles[idx].vx = 0;
+    particles[idx].vy = 0;
+    canvas.style.cursor = 'grabbing';
+    if (!groupSelectMode) { selectedParticle = idx; }
+    if (!running) draw();
+  } else if (groupSelectMode) {
+    // Empty space in group mode — start rubber-band selection
+    selBox = { x1: pos.x, y1: pos.y, x2: pos.x, y2: pos.y };
+  } else {
+    selectedParticle = null;
+    if (!running) draw();
+  }
+});
+
+let _lastCursorCheck = 0;
+window.addEventListener('mousemove', (e) => {
+  const pos = getCanvasPos(e);
+  if (dragging !== null) {
+    // Dragging a particle — works in both modes; always process drag events
+    const p = particles[dragging];
+    didDrag = true;
+    p.x = pos.x + dragOffsetX;
+    p.y = pos.y + dragOffsetY;
+    p.vx = 0;
+    p.vy = 0;
+    if (!running) { computeEnergy(); draw(); }
+    return;
+  }
+  if (groupSelectMode) {
+    if (selBox) {
+      selBox.x2 = pos.x; selBox.y2 = pos.y;
+      didDrag = true;
+      if (!running) draw();
+    }
+    // Throttle cursor-update scan to ~60fps
+    const _now = Date.now();
+    if (_now - _lastCursorCheck >= 16) {
+      _lastCursorCheck = _now;
+      const hover = findParticleAt(pos.x, pos.y);
+      canvas.style.cursor = hover >= 0 ? 'grab' : 'crosshair';
+    }
+    return;
+  }
+  // Throttle cursor-update scan to ~60fps
+  const _now = Date.now();
+  if (_now - _lastCursorCheck < 16) return;
+  _lastCursorCheck = _now;
+  const hover = findParticleAt(pos.x, pos.y);
+  canvas.style.cursor = hover >= 0 ? 'grab' : 'default';
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (dragging !== null) {
+    separateOverlaps();
+    if (!running) { computeEnergy(); draw(); }
+    dragging = null;
+    const pos = getCanvasPos(e);
+    const hover = findParticleAt(pos.x, pos.y);
+    canvas.style.cursor = groupSelectMode ? (hover >= 0 ? 'grab' : 'crosshair') : (hover >= 0 ? 'grab' : 'default');
+    return;
+  }
+  if (groupSelectMode && selBox) {
+    const minX = Math.min(selBox.x1, selBox.x2), maxX = Math.max(selBox.x1, selBox.x2);
+    const minY = Math.min(selBox.y1, selBox.y2), maxY = Math.max(selBox.y1, selBox.y2);
+    if ((maxX - minX) > 5 || (maxY - minY) > 5) {
+      selectedGroup = [];
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) selectedGroup.push(i);
+      }
+    } else {
+      selectedGroup = [];  // click without meaningful drag = clear
+    }
+    selBox = null;
+    if (!running) draw();
+  }
+});
+
+// ============================================================
+//  PACKED CLUSTER BUILDER
+//  Returns an array of { x, y, type } in a hex close-packed
+//  arrangement centered on (0, 0).  Particles are placed at
+//  touching distance (2 * PARTICLE_RADIUS) from their neighbors.
+//
+//  Proton assignment — farthest-point greedy:
+//    1. Seed the first proton at the outermost position.
+//    2. Each subsequent proton goes to the open slot whose
+//       minimum distance to any already-placed proton is largest.
+//  This maximises the spread of positive charge across the cluster.
+// ============================================================
+function buildPackedCluster(numProtons, numNeutrons, spacing = PARTICLE_RADIUS * 2) {
+  if (numProtons + numNeutrons === 0) return [];
+
+  const D    = spacing;               // 1 diameter — fine grid spacing
+  const rowH = D * Math.sqrt(3) / 2;
+  const jitter = () => (Math.random() - 0.5) * D * 0.3;
+
+  // Generate a large fine hex grid (enough for all particles plus room for proton spacing)
+  const span = Math.ceil(Math.sqrt(numProtons * 4 + numNeutrons)) + 4;
+  const grid = [];
+  for (let row = -span; row <= span; row++) {
+    const xOff = (Math.abs(row) % 2 === 1) ? D / 2 : 0;
+    for (let col = -span; col <= span; col++) {
+      const x = col * D + xOff + jitter();
+      const y = row * rowH + jitter();
+      grid.push({ x, y, dist2: x * x + y * y });
+    }
+  }
+  grid.sort((a, b) => a.dist2 - b.dist2);
+
+  // Step 1: pick proton slots — innermost positions at least 1.5 diameters apart.
+  const protonMinDist2 = (D * 1.0) * (D * 1.0);
+  const protonSlots = [];
+  const usedIdx = new Set();
+  for (let i = 0; i < grid.length && protonSlots.length < numProtons; i++) {
+    let tooClose = false;
+    for (const pp of protonSlots) {
+      const dx = grid[i].x - pp.x, dy = grid[i].y - pp.y;
+      if (dx * dx + dy * dy < protonMinDist2) { tooClose = true; break; }
+    }
+    if (!tooClose) { protonSlots.push(grid[i]); usedIdx.add(i); }
+  }
+
+  // Step 2: pick neutron slots — innermost positions not already used by protons.
+  const neutronSlots = [];
+  for (let i = 0; i < grid.length && neutronSlots.length < numNeutrons; i++) {
+    if (!usedIdx.has(i)) neutronSlots.push(grid[i]);
+  }
+
+  return [
+    ...protonSlots.map(p => ({ x: p.x, y: p.y, type: 'proton'  })),
+    ...neutronSlots.map(p => ({ x: p.x, y: p.y, type: 'neutron' })),
+  ];
+}
+
+// ============================================================
+//  RANDOM PROTON PLACER (Tab A)
+//  Poisson-disk rejection sampling: each proton is placed at a
+//  random position in a disk, retrying until it is farther than
+//  minDist from every already-placed proton.  minDist is set well
+//  above the strong-force cutoff so no interactions start.
+// ============================================================
+function buildRandomProtons(n) {
+  if (n === 0) return [];
+  const minDist = strongCutoff() * 1.023;        // clear margin above strong range
+  const radius  = minDist * Math.sqrt(n) * 0.85; // disk sized for n non-overlapping protons
+  const placed  = [];
+
+  for (let i = 0; i < n; i++) {
+    let best = null, bestMinD = -1;
+    const attempts = 300;
+    for (let a = 0; a < attempts; a++) {
+      // Uniform random point inside disk
+      const angle = Math.random() * 2 * Math.PI;
+      const r     = Math.sqrt(Math.random()) * radius;
+      const x = r * Math.cos(angle), y = r * Math.sin(angle);
+
+      let minD = Infinity;
+      for (const p of placed) {
+        const dx = p.x - x, dy = p.y - y;
+        const d  = Math.sqrt(dx * dx + dy * dy);
+        if (d < minD) minD = d;
+      }
+      if (placed.length === 0 || minD >= minDist) { best = { x, y }; break; }
+      if (minD > bestMinD) { bestMinD = minD; best = { x, y }; }
+    }
+    placed.push(best);
+  }
+  return placed.map(p => ({ x: p.x, y: p.y, type: 'proton' }));
+}
+
+// ============================================================
+//  CLUSTER PLACEMENT
+//  placeProtons(n)     — Tab A: random layout, no strong force
+//  placeNucleus(p, n)  — Tab B: tight hex pack, called by
+//                        Add buttons and neutron slider
+// ============================================================
+function resetSim() {
+  running = false;
+  replaying = false;
+  replayAccum = 0;
+  camX = 0; camY = 0;
+  cancelAnimationFrame(animId);
+  goBtn.textContent = '▶ GO';
+  goBtn.classList.remove('running');
+  particles = [];
+  snapshot = null;
+  replayBtn.disabled = true;
+  scrubReplayBtn.disabled = true;
+  _histReset();
+  _cachedBiggestCluster = null;
+  scrubFrame = -1;
+  timeSlider.value = 0;
+  timeSlider.max = 0;
+  updateFrameCounter(null, 0);
+  timeSlider.disabled = true;
+  selectedGroup = [];
+  selBox = null;
+}
+
+function placeCluster(numProtons, numNeutrons, spacing) {
+  resetSim();
+
+  const toolbarH = document.getElementById('toolbar').offsetHeight;
+  const cx = canvas.width / 2, cy = toolbarH + (canvas.height - toolbarH) / 2;
+  const cluster = buildPackedCluster(numProtons, numNeutrons, spacing);
+  for (const p of cluster) particles.push(createParticle(cx + p.x, cy + p.y, p.type));
+  updateStats();
+  computeEnergy();
+  draw();
+}
+
+function selectRightmostProton() {
+  if (!currentTabIsProton || particles.length === 0) return;
+  let best = -1, bestX = -Infinity;
+  for (let i = 0; i < particles.length; i++) {
+    if (particles[i].x > bestX) { bestX = particles[i].x; best = i; }
+  }
+  selectedParticle = best;
+}
+
+function placeProtons(n) {
+  resetSim();
+  const toolbarH = document.getElementById('toolbar').offsetHeight;
+  const cx = canvas.width / 2, cy = toolbarH + (canvas.height - toolbarH) / 2;
+  const pts = buildRandomProtons(n);
+  for (const p of pts) particles.push(createParticle(cx + p.x, cy + p.y, 'proton'));
+  updateStats();
+  computeEnergy();
+  selectRightmostProton();
+  draw();
+}
+
+let lastNucleusProtonCount = 2;  // tracks last Add N button pressed in Tab B
+
+function placeNucleus(numProtons, numNeutrons) {
+  lastNucleusProtonCount = numProtons;
+  placeCluster(numProtons, numNeutrons, PARTICLE_RADIUS * 2);
+}
+
+
+// ============================================================
+//  SNAPSHOT STATE (captured when user presses Go)
+// ============================================================
+let snapshot = null;  // Deep copy of particles at simulation start
+
+function takeSnapshot() {
+  snapshot = particles.map(p => ({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, type: p.type }));
+  replayBtn.disabled = false;
+  scrubReplayBtn.disabled = false;
+}
+
+function restoreSnapshot() {
+  if (!snapshot) return;
+  particles = snapshot.map(p => ({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, type: p.type }));
+}
+
+// ============================================================
+//  GO / STOP BUTTON
+// ============================================================
+goBtn.addEventListener('click', () => {
+  replaying = false;
+  running = !running;
+  logAction(running ? 'Pressed Go (' + currentTab + ')' : 'Paused (' + currentTab + ')');
+  goBtn.textContent = running ? '❙ ❙' : '▶ GO';
+  goBtn.classList.toggle('running', running);
+  if (running) {
+    if (_histLen === 0) {
+      // Fresh start (after reset) — initialise history and snapshot
+      recordedSpeed = speed;
+      takeSnapshot();
+    }
+    scrubFrame = -1;       // exit any scrub/replay mode, go live
+    timeSlider.disabled = true;
+    loop();
+  } else {
+    cancelAnimationFrame(animId);
+  }
+});
+
+// ============================================================
+//  REPLAY BUTTON
+// ============================================================
+function doReplay() {
+  if (!_histLen) return;
+  // Snap current slider values so replay uses whatever zoom/speed are set now
+  applySpeedSlider();
+  zoom = parseInt(zoomSlider.value) / 10;
+  cancelAnimationFrame(animId);
+  running = false;
+  replaying = false;
+  scrubFrame = 0;
+  timeSlider.value = 0;
+  renderFrame(0);
+  // Auto-play through recorded history
+  replayAccum = 0;
+  replaying = true;
+  running = true;
+  goBtn.textContent = '❙ ❙';
+  goBtn.classList.add('running');
+  animId = requestAnimationFrame(loop);
+}
+replayBtn.addEventListener('click', doReplay);
+scrubReplayBtn.addEventListener('click', doReplay);
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  logAction('Pressed Reset (' + currentTab + ')');
+  resetSim();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+});
+
+
+// ============================================================
+//  SPEED SLIDER (non-linear stops for fine control at low speeds)
+// ============================================================
+const SPEED_STOPS = [
+  0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5,
+  1.0, 1.5, 2.0, 2.5, 3.0,
+  4, 5, 6, 7, 8, 9, 10
+];
+function applySpeedSlider() {
+  const idx = parseInt(speedSlider.value);
+  speed = SPEED_STOPS[idx] / 2;  // Internal dt is half the display value for stability
+}
+let _speedLogTimer = null;
+speedSlider.addEventListener('input', function() {
+  applySpeedSlider();
+  clearTimeout(_speedLogTimer);
+  _speedLogTimer = setTimeout(() => logAction('Set speed to ' + SPEED_STOPS[parseInt(this.value)] + '×'), 400);
+});
+
+// ============================================================
+//  VIZ TOGGLES & SLIDERS
+// ============================================================
+
+// Zoom: scale the canvas transform centered on the midpoint.
+// Physics coordinates are unchanged — only the view scales.
+zoomSlider.addEventListener('input', function() {
+  zoom = parseInt(this.value) / 10;
+  if (!running) draw();
+});
+
+// Electric field: toggles Coulomb heatmap visualization.
+document.getElementById('electricFieldToggle').addEventListener('change', function() {
+  showElectricField = this.checked;
+  hmComposite.width = 0; // invalidate cache so stale field doesn't ghost on next frame
+  if (!running) draw();
+});
+
+// Strong field: toggles strong nuclear heatmap visualization.
+document.getElementById('strongFieldToggle').addEventListener('change', function() {
+  showStrongField = this.checked;
+  hmComposite.width = 0; // invalidate cache
+  if (!running) draw();
+});
+
+
+// ============================================================
+//  TAB SWITCHING
+// ============================================================
+const neutronFrame = document.getElementById('neutronFrame');
+
+function applyTab(tab) {
+  const isProtonOnly = tab === true;
+  const isNucleus    = !isProtonOnly;
+  currentTabIsProton = isProtonOnly;
+  currentTab = isProtonOnly ? 'proton' : 'nucleus';
+  logAction('Switched to ' + (isProtonOnly ? 'PROTONS' : 'INVESTIGATE STABILITY') + ' tab');
+  document.getElementById('largestNucleusLabel').style.display = isNucleus ? '' : 'none';
+  neutronFrame.style.visibility = isNucleus ? 'visible' : 'hidden';
+  document.getElementById('particleBtns').style.display        = isNucleus ? 'none' : 'flex';
+  document.getElementById('particleBtnsNucleus').style.display = isNucleus ? 'flex' : 'none';
+  document.getElementById('tabA').classList.toggle('active', isProtonOnly);
+  document.getElementById('tabB').classList.toggle('active', isNucleus);
+  document.getElementById('centerLabel').style.visibility = isNucleus ? 'visible' : 'hidden';
+  // Strong field: hide checkbox + key entry on Tab A; restore on Tab B
+  document.getElementById('strongFieldLabel').style.visibility = isProtonOnly ? 'hidden' : '';
+  document.getElementById('forcePanelKeyStrong').style.display = isProtonOnly ? 'none' : '';
+  if (isProtonOnly) {
+    showStrongField = false;
+    document.getElementById('strongFieldToggle').checked = false;
+    // Force box: hide One/Group, make All/Total full-width, make Show Forces 3x tall
+    document.getElementById('forceModeSelCols').style.display = 'none';
+    const modeCols = document.getElementById('forceModeModeCols');
+    modeCols.style.flexDirection = 'column';
+    modeCols.style.width = '100%';
+    modeCols.querySelectorAll('button').forEach(b => { b.style.width = '100%'; b.style.display = 'block'; });
+    const opts = document.getElementById('forceModeOptions');
+    opts.style.flexDirection = 'column';
+    opts.style.width = '100%';
+    document.getElementById('showHideForces').classList.toggle('show-forces-large', arrowMode === 0);
+    document.querySelector('.force-mode-btn[data-mode="1"]').textContent = 'All Forces';
+    document.querySelector('.force-mode-btn[data-mode="2"]').textContent = 'Total Force';
+    // Turn off center tracking
+    centerTracking = false;
+    document.getElementById('centerChk').checked = false;
+    // Default to single-particle mode, no group
+    groupSelectMode = false;
+    selectedGroup = [];
+    canvas.style.cursor = 'default';
+  } else {
+    // Tab B: restore all Tab-A-only overrides; strong field on by default
+    showStrongField = true;
+    document.getElementById('strongFieldToggle').checked = true;
+    document.getElementById('forceModeSelCols').style.display = 'flex';
+    const modeCols = document.getElementById('forceModeModeCols');
+    modeCols.style.width = '';
+    modeCols.querySelectorAll('button').forEach(b => { b.style.width = ''; b.style.display = ''; });
+    const opts = document.getElementById('forceModeOptions');
+    opts.style.flexDirection = '';
+    opts.style.width = '';
+    document.getElementById('showHideForces').classList.toggle('show-forces-large', arrowMode === 0);
+    document.querySelector('.force-mode-btn[data-mode="1"]').textContent = 'All';
+    document.querySelector('.force-mode-btn[data-mode="2"]').textContent = 'Total';
+  }
+  // Clear sim + playback state on tab switch. resetSim() also clears
+  // particleHistory + timeSlider (issue #34) and the replaying flag (#35).
+  resetSim();
+  selectedParticle = null;
+  quantumEjectAt = quantumTimerStartAt = null;
+  quantumFlashes = [];
+  stabilityCheckFrame = null;
+  updateStats();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+document.getElementById('tabA').addEventListener('click', () => applyTab(true));
+document.getElementById('tabB').addEventListener('click', () => {
+  applyTab(false);
+  neutronSlider.value = 2;
+  neutronSliderVal.textContent = '2';
+  placeNucleus(2, 2);
+  updateCam();
+});
+
+
+function findAllClusters() {
+  const active = particles.filter(p => !p.ejected);
+  if (active.length === 0) return [];
+  const threshold = strongCutoff() * 1.5;
+  const visited = new Array(active.length).fill(false);
+  const clusters = [];
+  for (let i = 0; i < active.length; i++) {
+    if (visited[i]) continue;
+    const cluster = [];
+    const queue = [i];
+    visited[i] = true;
+    while (queue.length) {
+      const idx = queue.shift();
+      cluster.push(active[idx]);
+      for (let j = 0; j < active.length; j++) {
+        if (visited[j]) continue;
+        const dx = active[idx].x - active[j].x;
+        const dy = active[idx].y - active[j].y;
+        if (dx * dx + dy * dy <= threshold * threshold) {
+          visited[j] = true;
+          queue.push(j);
+        }
+      }
+    }
+    clusters.push(cluster);
+  }
+  return clusters;
+}
+
+function findBiggestCluster() {
+  return findAllClusters().reduce((best, c) => c.length > best.length ? c : best, []);
+}
+
+let centerTracking = false;
+document.getElementById('centerChk').addEventListener('change', function() {
+  centerTracking = this.checked;
+  if (!running) draw();
+});
+
+
+
+document.querySelectorAll('.particle-add-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const count = parseInt(btn.dataset.count);
+    if (currentTabIsProton) {
+      logAction('Set ' + count + ' proton' + (count !== 1 ? 's' : ''));
+      placeProtons(count);
+    } else {
+      logAction('Set nucleus: ' + count + 'p ' + parseInt(neutronSlider.value) + 'n');
+      placeNucleus(count, parseInt(neutronSlider.value));
+    }
+    updateCam();
+  });
+});
+
+const neutronSlider    = document.getElementById('neutronSlider');
+const neutronSliderVal = { textContent: '' }; // label removed; stub to avoid errors
+let _neutronLogTimer = null;
+neutronSlider.addEventListener('input', function() {
+  neutronSliderVal.textContent = this.value;
+  if (lastNucleusProtonCount > 0) {
+    placeNucleus(lastNucleusProtonCount, parseInt(this.value));
+    updateCam();
+    clearTimeout(_neutronLogTimer);
+    _neutronLogTimer = setTimeout(() => logAction('Set neutrons to ' + this.value + ' (nucleus ' + lastNucleusProtonCount + 'p)'), 400);
+  }
+});
+
+function stepNeutronSlider(delta) {
+  const v = Math.min(60, Math.max(0, parseInt(neutronSlider.value) + delta));
+  neutronSlider.value = v;
+  neutronSliderVal.textContent = v;
+  if (lastNucleusProtonCount > 0) { placeNucleus(lastNucleusProtonCount, v); updateCam(); }
+}
+document.getElementById('neutronDecBtn').addEventListener('click', () => stepNeutronSlider(-1));
+document.getElementById('neutronIncBtn').addEventListener('click', () => stepNeutronSlider(1));
+
+
+// Force mode buttons — always visible, gray/blue
+let lastArrowMode = 1; // remembered mode for Show/Hide toggle
+
+function setForceModeActive(mode) {
+  const wasVisible = arrowMode > 0;
+  arrowMode = mode;
+  if (mode > 0) lastArrowMode = mode;
+  const _fmNames = { 0: 'off', 1: 'all forces', 2: 'total force' };
+  logAction('Forces: ' + (_fmNames[mode] || mode));
+  // On Tab A, auto-select rightmost proton when turning forces on
+  if (currentTabIsProton && mode > 0) selectRightmostProton();
+  // On Tab B, auto-select the first proton when forces turn on with nothing selected
+  if (!currentTabIsProton && mode > 0 && selectedParticle < 0 && particles.length > 0) {
+    for (let i = 0; i < particles.length; i++) {
+      if (particles[i].type === 'proton') { selectedParticle = i; break; }
+    }
+  }
+  // Show/Hide toggle label
+  const shBtn = document.getElementById('showHideForces');
+  if (shBtn) {
+    shBtn.textContent = arrowMode > 0 ? 'Hide forces' : 'Show forces';
+    shBtn.classList.toggle('active', arrowMode > 0);
+    shBtn.classList.toggle('show-forces-large', arrowMode === 0);
+  }
+  // Arrow mode buttons (1/2)
+  document.querySelectorAll('.force-mode-btn[data-mode]').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.mode) === mode);
+  });
+  // Show/hide the One/Group + All/Total sub-buttons
+  const opts = document.getElementById('forceModeOptions');
+  if (opts) {
+    opts.style.display = arrowMode > 0 ? 'flex' : 'none';
+    const wrap = opts.parentElement;
+    if (wrap) wrap.style.justifyContent = 'flex-start';
+  }
+  if ((arrowMode > 0) !== wasVisible) {
+    draw();
+    updateCam();
+  } else if (!running) {
+    draw();
+  }
+}
+
+// Show/Hide forces toggle
+document.getElementById('showHideForces').addEventListener('click', () => {
+  setForceModeActive(arrowMode > 0 ? 0 : lastArrowMode);
+});
+
+// All forces / Total force buttons — selecting one also turns forces on
+document.querySelectorAll('.force-mode-btn[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => setForceModeActive(parseInt(btn.dataset.mode)));
+});
+
+// One particle / Group select buttons
+document.querySelectorAll('.force-mode-btn[data-selmode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    groupSelectMode = btn.dataset.selmode === 'group';
+    if (!groupSelectMode) { selectedGroup = []; selBox = null; }
+    canvas.style.cursor = groupSelectMode ? 'crosshair' : 'default';
+    document.querySelectorAll('.force-mode-btn[data-selmode]').forEach(b => {
+      b.classList.toggle('active', b === btn);
+    });
+    if (!running) draw();
+  });
+});
+
+// ============================================================
+//  UI HELPERS
+// ============================================================
+
+function updateStats() {
+  let np, nn;
+  if (currentTab === 'nucleus') {
+    // Reuse the cluster computed by applyBiggestClusterStability() this frame (issue #44).
+    // Fall back to a fresh call when the cache is stale (e.g. renderFrame / direct calls).
+    const cluster = _cachedBiggestCluster !== null ? _cachedBiggestCluster : findBiggestCluster();
+    np = cluster.filter(p => p.type === 'proton').length;
+    nn = cluster.filter(p => p.type === 'neutron').length;
+  } else {
+    np = particles.filter(p => p.type === 'proton').length;
+    nn = 0;
+  }
+  statProtons.textContent = `Protons: ${np}`;
+  statNeutrons.textContent = `Neutrons: ${nn}`;
+  statNeutrons.style.visibility = currentTabIsProton ? 'hidden' : 'visible';
+}
+
+// ============================================================
+//  FORCE MODEL
+//  Two forces act between particles:
+//
+//  Coulomb repulsion (proton-proton only):
+//    F = coulombStrength / r²  (softened: r clamped to PARTICLE_RADIUS)
+//
+//  Strong nuclear force (all pairs within cutoff):
+//    F = -strongForceStrength  (constant attraction, no r-dependence)
+//    Cutoff = PARTICLE_RADIUS * 2 * strongForceRange
+//
+//  The combination creates a potential well: particles repel at long
+//  range (protons), attract strongly once close, and can bind into
+//  nuclei when kinetic energy is low enough to stay in the well.
+// ============================================================
+function strongCutoff() {
+  return PARTICLE_RADIUS * 2 * strongForceRange;
+}
+
+// Returns net force magnitude along the axis between two particles.
+// Positive = repulsive (pushes apart), negative = attractive (pulls together).
+function pairForce(dist, distSq, aType, bType, strongScale) {
+  let force = 0;
+  // Coulomb: only between protons (1/r² with softening to prevent blow-up)
+  if (aType === 'proton' && bType === 'proton') {
+    const softDistSq = Math.max(distSq, PARTICLE_RADIUS * PARTICLE_RADIUS);
+    force += coulombStrength / softDistSq;
+  }
+  // Strong nuclear force: constant attraction within cutoff, no repulsive core.
+  // Nucleus-tab only — the proton tab is a Coulomb-only world.
+  if (!currentTabIsProton) {
+    const cutoff = strongCutoff();
+    if (dist < cutoff) {
+      force -= strongForceStrength * (strongScale ?? 1.0);
+    }
+  }
+  return force;
+}
+
+// ============================================================
+//  ENERGY COMPUTATION
+//  Computes true kinetic and potential energy from particle state,
+//  then applies display transformations before writing to the UI
+//  and energy history.
+//
+//  KE = Σ ½mv²  (unit mass, so just ½v²)
+//  IE = Coulomb potential + Strong potential
+//
+//  Potential integrals match the force model:
+//    Coulomb: V = K/r  (softened)
+//    Strong:  V = -S*(cutoff - r)  (linear well, zero at cutoff)
+// ============================================================
+function computeEnergy() {
+  let kinetic = 0;
+  let eiePotential = 0;  // Coulomb (electric) potential energy
+  let siePotential = 0;  // Strong nuclear potential energy
+  const n = particles.length;
+
+  for (let i = 0; i < n; i++) {
+    const p = particles[i];
+    kinetic += 0.5 * (p.vx * p.vx + p.vy * p.vy);  // KE = ½mv² (unit mass)
+  }
+
+  const cutoff = strongCutoff();
+  const includeStrong = !currentTabIsProton;  // proton tab has no strong force
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const dx = particles[j].x - particles[i].x;
+      const dy = particles[j].y - particles[i].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 0) {
+        // Coulomb potential: between protons only (with softening)
+        if (particles[i].type === 'proton' && particles[j].type === 'proton') {
+          const softDist = Math.max(dist, PARTICLE_RADIUS);
+          eiePotential += coulombStrength / softDist;
+        }
+        // Strong force potential: V = -S * (cutoff - r), zero at cutoff, deepens linearly inward
+        if (includeStrong && dist < cutoff) {
+          siePotential -= strongForceStrength * (cutoff - dist);
+        }
+      }
+    }
+  }
+  const potential = eiePotential + siePotential;
+
+  // Update inline energy display in toolbar
+
+  return { kinetic, potential };  // Return true values for callers that need them
+}
+
+// ============================================================
+//  PHYSICS STEP
+//  Called once per animation frame with dt = speed.
+//  Internally subdivides into SUBSTEPS for accuracy.
+//
+//  Each substep:
+//    1. Compute pairwise forces → accumulate into velocities
+//    2. Let dragged particle exert force without being pushed
+//    3. Integrate positions (symplectic Euler: v first, then x)
+//    4. Hard-sphere constraint: push apart any overlapping pairs
+//       and exchange their approaching normal velocities
+//
+//  After all substeps:
+//    5. Apply damping (currently disabled: damping = 1.0)
+//    6. Antispin: clamp cluster angular velocity if enabled
+// ============================================================
+function step(dt) {
+  const n = particles.length;
+  const subDt = dt / SUBSTEPS;  // Per-substep timestep
+
+  // Hoist tab check + per-particle strongScale out of the N²×SUBSTEPS inner loop.
+  // strongScale is set by updateQuantumStability() once per frame before step(), so
+  // it's constant for the entire step() call.
+  const isNucleus = !currentTabIsProton;
+  const strongScales = new Float32Array(n);
+  if (isNucleus) {
+    for (let i = 0; i < n; i++) strongScales[i] = particles[i].strongScale ?? 1;
+  }
+
+  for (let sub = 0; sub < SUBSTEPS; sub++) {
+    // 1. Compute pairwise forces
+    for (let i = 0; i < n; i++) {
+      if (i === dragging) continue;
+      for (let j = i + 1; j < n; j++) {
+        if (j === dragging) continue;
+        const a = particles[i];
+        const b = particles[j];
+        if (a.ejected || b.ejected) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq > COULOMB_CUTOFF_SQ) continue;  // Too far for any meaningful force
+        const dist = Math.sqrt(distSq);
+        if (dist < 0.01) continue;  // Skip coincident particles
+        const ss = isNucleus ? Math.min(strongScales[i], strongScales[j]) : 1;
+        const force = pairForce(dist, distSq, a.type, b.type, ss);
+        const fx = force * (dx / dist);
+        const fy = force * (dy / dist);
+        a.vx -= fx * subDt;
+        a.vy -= fy * subDt;
+        b.vx += fx * subDt;
+        b.vy += fy * subDt;
+      }
+    }
+
+
+    // Cohesion: gentle spring toward each particle's cluster CM (nucleus tab)
+    if (isNucleus) {
+      for (let i = 0; i < n; i++) {
+        if (i === dragging) continue;
+        const p = particles[i];
+        if (p.ejected || p.clusterCmx === undefined) continue;
+        const dx = p.clusterCmx - p.x;
+        const dy = p.clusterCmy - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 0.01) continue;
+        const f = COHESION_K * dist;
+        p.vx += (dx / dist) * f * subDt;
+        p.vy += (dy / dist) * f * subDt;
+      }
+    }
+
+    // 2. Dragged particle still exerts force on others (but is not itself pushed)
+    if (dragging !== null) {
+      const d = particles[dragging];
+      for (let j = 0; j < n; j++) {
+        if (j === dragging) continue;
+        const b = particles[j];
+        const dx = b.x - d.x;
+        const dy = b.y - d.y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
+        if (dist < 0.01) continue;
+        const force = pairForce(dist, distSq, d.type, b.type);
+        const fx = force * (dx / dist);
+        const fy = force * (dy / dist);
+        b.vx += fx * subDt;
+        b.vy += fy * subDt;
+      }
+    }
+
+    // 3. Integrate positions (symplectic Euler: velocity already updated above)
+    for (let i = 0; i < n; i++) {
+      if (i === dragging) continue;
+      const p = particles[i];
+      p.x += p.vx * subDt;
+      p.y += p.vy * subDt;
+    }
+
+    // 4. Hard-sphere constraint: resolve any remaining overlaps.
+    //    Force softening caps—but doesn't eliminate—overlap at high speed.
+    //    Position correction: push overlapping centers apart by full overlap.
+    //    Velocity correction: only when particles are approaching (dvDotN < 0)
+    //    — swap the normal velocity component (equal-mass elastic collision).
+    //    If one particle is being dragged, only the free particle is corrected.
+    const minSep = PARTICLE_RADIUS * 2;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = particles[i];
+        const b = particles[j];
+        if (a.ejected || b.ejected) continue;
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        const dSq = dx * dx + dy * dy;
+        if (dSq >= minSep * minSep) continue;
+        let d = Math.sqrt(dSq);
+        if (d < 0.001) { dx = 1; dy = 0; d = 0.001; }
+        const nx = dx / d;
+        const ny = dy / d;
+        const overlap = minSep - d;
+        const aFixed = (i === dragging);
+        const bFixed = (j === dragging);
+
+        // Position correction
+        if (aFixed && !bFixed) {
+          b.x += nx * overlap; b.y += ny * overlap;
+        } else if (bFixed && !aFixed) {
+          a.x -= nx * overlap; a.y -= ny * overlap;
+        } else if (!aFixed && !bFixed) {
+          a.x -= nx * overlap * 0.5; a.y -= ny * overlap * 0.5;
+          b.x += nx * overlap * 0.5; b.y += ny * overlap * 0.5;
+        }
+
+        // Inelastic velocity correction: zero out approaching velocity
+        // (the strong force handles the rebound; this is just a safety net)
+        const dvx = b.vx - a.vx;
+        const dvy = b.vy - a.vy;
+        const dvDotN = dvx * nx + dvy * ny;
+        if (dvDotN < 0) {  // approaching
+          const half = dvDotN * 0.5;
+          if (aFixed) {
+            b.vx -= dvDotN * nx; b.vy -= dvDotN * ny;
+          } else if (bFixed) {
+            a.vx += dvDotN * nx; a.vy += dvDotN * ny;
+          } else {
+            a.vx += half * nx; a.vy += half * ny;
+            b.vx -= half * nx; b.vy -= half * ny;
+          }
+        }
+      }
+    }
+  }  // end substep loop
+
+  // 5. Damping: multiply all velocities by damping factor once per frame.
+  //    Currently disabled (damping = 1.0) so energy is conserved.
+  if (damping < 1.0) {
+    for (let i = 0; i < n; i++) {
+      if (i === dragging) continue;
+      particles[i].vx *= damping;
+      particles[i].vy *= damping;
+    }
+  }
+
+  // 6. Antispin: suppress runaway rotation in bound clusters.
+  //    Without this, the strong force can pump angular momentum into a
+  //    nucleus over time and it will spin up indefinitely.
+  //    Algorithm:
+  //      a) Build adjacency list: particles within strongCutoff are "bonded"
+  //      b) Flood-fill to find connected clusters of 3+ particles
+  //      c) For each cluster: compute CM, angular momentum L, moment I
+  //         → omega = L / I  (angular velocity)
+  //      d) Only subtract the excess beyond MAX_OMEGA (1 rev/sim-s),
+  //         leaving a small allowed spin so clusters still feel natural.
+  //    MAX_OMEGA scales with speed so the allowed spin is speed-invariant.
+  if (antispin && n >= 3) {
+    const cutoffSpin = strongCutoff();
+    const cutoffSpinSq = cutoffSpin * cutoffSpin;
+
+    // Build adjacency list
+    const adj = new Array(n);
+    for (let i = 0; i < n; i++) adj[i] = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = particles[j].x - particles[i].x;
+        const dy = particles[j].y - particles[i].y;
+        if (dx * dx + dy * dy < cutoffSpinSq) {
+          adj[i].push(j);
+          adj[j].push(i);
+        }
+      }
+    }
+
+    // Flood-fill to find connected clusters
+    const visited = new Uint8Array(n);
+    for (let seed = 0; seed < n; seed++) {
+      if (visited[seed]) continue;
+      if (adj[seed].length === 0) { visited[seed] = 1; continue; }
+      const cluster = [seed];
+      visited[seed] = 1;
+      let head = 0;
+      while (head < cluster.length) {
+        const cur = cluster[head++];
+        for (let k = 0; k < adj[cur].length; k++) {
+          const nb = adj[cur][k];
+          if (!visited[nb]) { visited[nb] = 1; cluster.push(nb); }
+        }
+      }
+
+      if (cluster.length < 3) continue;
+
+      // Center of mass position and velocity
+      let cmx = 0, cmy = 0, cvx = 0, cvy = 0;
+      for (let k = 0; k < cluster.length; k++) {
+        const p = particles[cluster[k]];
+        cmx += p.x; cmy += p.y; cvx += p.vx; cvy += p.vy;
+      }
+      cmx /= cluster.length; cmy /= cluster.length;
+      cvx /= cluster.length; cvy /= cluster.length;
+
+      // Angular momentum L and moment of inertia I about center of mass
+      let L = 0, I = 0;
+      for (let k = 0; k < cluster.length; k++) {
+        const p = particles[cluster[k]];
+        const rx = p.x - cmx, ry = p.y - cmy;
+        const vxr = p.vx - cvx, vyr = p.vy - cvy;
+        L += rx * vyr - ry * vxr;
+        I += rx * rx + ry * ry;
+      }
+      if (I < 0.001) continue;
+
+      // omega in rad/subDt. MAX_OMEGA = 1 rev per sim-second at 60fps,
+      // scaled by speed so the visual spin rate is consistent across speeds.
+      // removeOmega is only the excess — spins within the cap are untouched.
+      const omega = L / I;
+      const MAX_OMEGA = 2 * Math.PI * speed / (60 * SUBSTEPS);  // 1 rev/sim-s, scales with speed
+      const removeOmega = Math.sign(omega) * Math.max(0, Math.abs(omega) - MAX_OMEGA);
+      for (let k = 0; k < cluster.length; k++) {
+        if (cluster[k] === dragging) continue;
+        const p = particles[cluster[k]];
+        const rx = p.x - cmx, ry = p.y - cmy;
+        p.vx -= -removeOmega * ry;
+        p.vy -=  removeOmega * rx;
+      }
+    }
+  }
+}
+
+// ============================================================
+//  COLORMAP
+//  Pre-baked 256-entry RGBA lookup table mapping energy density
+//  [0, 1] to a blue-white gradient (transparent at zero, opaque
+//  near-white at max). Used by the Coulomb heatmap renderer.
+// ============================================================
+function buildColorstops(stops, out) {
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255;
+    let s0 = stops[0], s1 = stops[1];
+    for (let s = 0; s < stops.length - 1; s++) {
+      if (t >= stops[s].t && t <= stops[s + 1].t) { s0 = stops[s]; s1 = stops[s + 1]; break; }
+    }
+    const f = (t - s0.t) / (s1.t - s0.t);
+    const idx = i * 4;
+    out[idx]     = s0.r + (s1.r - s0.r) * f;
+    out[idx + 1] = s0.g + (s1.g - s0.g) * f;
+    out[idx + 2] = s0.b + (s1.b - s0.b) * f;
+    out[idx + 3] = s0.a + (s1.a - s0.a) * f;
+  }
+}
+
+const COLORMAP = new Uint8Array(256 * 4);
+buildColorstops([
+  { t: 0.0,  r: 0,   g: 0,   b: 0,   a: 0   },
+  { t: 0.12, r: 10,  g: 35,  b: 170, a: 140 },
+  { t: 0.4,  r: 25,  g: 85,  b: 235, a: 210 },
+  { t: 0.7,  r: 70,  g: 165, b: 255, a: 245 },
+  { t: 1.0,  r: 210, g: 238, b: 255, a: 255 },
+], COLORMAP);
+
+const STRONG_COLORMAP = new Uint8Array(256 * 4);
+buildColorstops([
+  { t: 0.0,  r: 0,   g: 0,   b: 0,   a: 0   },
+  { t: 0.12, r: 160, g: 45,  b: 0,   a: 140 },
+  { t: 0.4,  r: 240, g: 110, b: 10,  a: 210 },
+  { t: 0.7,  r: 255, g: 185, b: 70,  a: 245 },
+  { t: 1.0,  r: 255, g: 238, b: 210, a: 255 },
+], STRONG_COLORMAP);
+
+// ============================================================
+//  COMBINED HEATMAP
+//  Single pixel loop computes both electric (blue) and strong
+//  (orange) fields. Results are composited into hmComposite at
+//  full resolution. When running, the composite is reused every
+//  other frame (heatmap every 2 frames — imperceptible at the
+//  blurred quarter-resolution the maps are rendered at).
+// ============================================================
+function drawCombinedHeatmap() {
+  const fullW = canvas.width, fullH = canvas.height;
+  const scale = _quality === 'simple' ? 0.08 : _quality === 'detailed' ? 0.15 : 0.25;
+  const w = Math.ceil(fullW * scale), h = Math.ceil(fullH * scale);
+
+  hmFrameCounter++;
+
+  // Build electric pairs (proton-proton only)
+  const elecPairs = [];
+  if (showElectricField) {
+    const refEnergy = coulombStrength / (PARTICLE_RADIUS * 2);
+    const logRef = Math.log(2);
+    const protonList = particles.filter(p => p.type === 'proton');
+    for (let i = 0; i < protonList.length; i++) {
+      for (let j = i + 1; j < protonList.length; j++) {
+        const a = protonList[i], b = protonList[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 0.01) continue;
+        const energy = coulombStrength / dist;
+        const sigma = Math.max(3.5, 28 / Math.sqrt(dist));
+        const distFade = Math.exp(-dist / 350);
+        const mag = Math.min(1, Math.log(1 + energy / refEnergy) / logRef) * distFade;
+        const cullSq = 16 * (sigma * 2) * (sigma * 2);
+        elecPairs.push({ ax: a.x, ay: a.y, ux: dx / dist, uy: dy / dist, dist, sigma, mag, cullSq });
+      }
+    }
+  }
+  elecPairs.sort((a, b) => b.mag - a.mag);
+
+  // Build strong pairs (all nucleons within cutoff)
+  const strongPairs = [];
+  if (showStrongField) {
+    const cutoff = strongCutoff();
+    const eqDist = Math.max(cutoff * equilibriumRatio, PARTICLE_RADIUS * 2);
+    const span = cutoff - eqDist;
+    if (span > 0) {
+      const maxBinding = strongForceStrength * span / 2;
+      const n = particles.length;
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const a = particles[i], b = particles[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist === 0 || dist >= cutoff) continue;
+          const dr = dist - eqDist;
+          const energy = strongForceStrength / (2 * span) * (dr * dr - span * span);
+          const mag = Math.min(1, Math.abs(energy) / maxBinding);
+          const sigma = Math.max(0.375, 0.0875 * dist);
+          const spread = 1.6;
+          const cullSq = 16 * (sigma * spread * 3) * (sigma * spread * 3);
+          strongPairs.push({ ax: a.x, ay: a.y, ux: dx / dist, uy: dy / dist, dist, sigma, mag, spread, cullSq });
+        }
+      }
+    }
+  }
+  strongPairs.sort((a, b) => b.mag - a.mag);
+
+  if (elecPairs.length === 0 && strongPairs.length === 0) {
+    hmComposite.width = 0;
+    return;
+  }
+
+  ensureHmBuffers(w, h);
+  if (elecPairs.length   > 0) hmDataElec.fill(0);
+  if (strongPairs.length > 0) hmDataStrong.fill(0);
+
+  const invScale = 1 / scale;
+  const cxH = fullW / 2, cyH = fullH / 2;
+
+  // Single pixel loop — computes both fields at once
+  for (let py = 0; py < h; py++) {
+    const worldY = (py * invScale - cyH - camY) / zoom + cyH;
+    for (let px = 0; px < w; px++) {
+      const worldX = (px * invScale - cxH - camX) / zoom + cxH;
+      const di = (py * w + px) * 4;
+
+      // Electric field
+      if (elecPairs.length > 0) {
+        let total = 0;
+        for (let k = 0; k < elecPairs.length; k++) {
+          const p = elecPairs[k];
+          const rx = worldX - p.ax, ry = worldY - p.ay;
+          const para = rx * p.ux + ry * p.uy;
+          const e1 = para > 0 ? Math.min(1, para / 8) : 0;
+          const e2 = para < p.dist ? Math.min(1, (p.dist - para) / 8) : 0;
+          const endFade = e1 * e2;
+          if (endFade <= 0) continue;
+          const perpSq = Math.max(0, rx * rx + ry * ry - para * para);
+          if (perpSq > p.cullSq) continue;
+          const t = para / p.dist;
+          const sigmaT = p.sigma * (1 + Math.sin(Math.PI * t));
+          total += p.mag * Math.exp(-perpSq / (2 * sigmaT * sigmaT)) * endFade;
+          if (total >= 1/3) break;
+        }
+        if (total > 0.002) {
+          const ci = (Math.min(255, (total * 3.0 * 255) | 0));
+          const ci4 = ci * 4;
+          hmDataElec[di]     = COLORMAP[ci4];
+          hmDataElec[di + 1] = COLORMAP[ci4 + 1];
+          hmDataElec[di + 2] = COLORMAP[ci4 + 2];
+          hmDataElec[di + 3] = COLORMAP[ci4 + 3];
+        }
+      }
+
+      // Strong field
+      if (strongPairs.length > 0) {
+        let total = 0;
+        for (let k = 0; k < strongPairs.length; k++) {
+          const p = strongPairs[k];
+          const rx = worldX - p.ax, ry = worldY - p.ay;
+          const para = rx * p.ux + ry * p.uy;
+          const margin = (p.spread - 1) / 2 * p.dist;
+          const extDist = p.dist * p.spread;
+          const paraExt = para + margin;
+          const e1 = paraExt > 0 ? Math.min(1, paraExt / 8) : 0;
+          const e2 = paraExt < extDist ? Math.min(1, (extDist - paraExt) / 8) : 0;
+          const endFade = e1 * e2;
+          if (endFade <= 0) continue;
+          const perpSq = Math.max(0, rx * rx + ry * ry - para * para);
+          if (perpSq > p.cullSq) continue;
+          const t = paraExt / extDist;
+          const sigmaT = p.sigma * p.spread * (1 + 2 * Math.sin(Math.PI * t));
+          const val = p.mag * Math.exp(-perpSq / (2 * sigmaT * sigmaT)) * endFade;
+          if (val > total) total = val;
+          if (total >= 1/3) break;
+        }
+        if (total > 0.002) {
+          const ci = (Math.min(255, (total * 3.0 * 255) | 0));
+          const ci4 = ci * 4;
+          hmDataStrong[di]     = STRONG_COLORMAP[ci4];
+          hmDataStrong[di + 1] = STRONG_COLORMAP[ci4 + 1];
+          hmDataStrong[di + 2] = STRONG_COLORMAP[ci4 + 2];
+          hmDataStrong[di + 3] = STRONG_COLORMAP[ci4 + 3];
+        }
+      }
+    }
+  }
+
+  // Composite both layers into hmComposite at full resolution
+  if (hmComposite.width !== fullW || hmComposite.height !== fullH) {
+    hmComposite.width = fullW; hmComposite.height = fullH;
+  }
+  hmcCtx.clearRect(0, 0, fullW, fullH);
+  hmcCtx.imageSmoothingEnabled = true;
+  hmcCtx.imageSmoothingQuality = 'high';
+  if (elecPairs.length > 0) {
+    hmCtx.putImageData(hmImgElec, 0, 0);
+    hmcCtx.drawImage(hmCanvas, 0, 0, fullW, fullH);
+  }
+  if (strongPairs.length > 0) {
+    hmCtx.putImageData(hmImgStrong, 0, 0);
+    hmcCtx.drawImage(hmCanvas, 0, 0, fullW, fullH);
+  }
+
+  ctx.drawImage(hmComposite, 0, 0);
+}
+
+
+// ============================================================
+//  FORCE ARROW RENDERING
+// ============================================================
+const ELEC_ARROW_COLOR   = 'rgba(70,165,255,0.88)';   // electric field blue
+const STRONG_ARROW_COLOR = 'rgba(255,185,70,0.88)';    // strong field orange
+
+// ---- Particle labels for "All Forces" mode ----
+// Letters A,B,C,… on every proton; numbers 1,2,3,… on every neutron within
+// strongCutoff() of the selected particle. Empty string otherwise. Active only
+// when arrowMode === 1 (All Forces), in single-particle selection mode, on the
+// proton tab (any count) or the nucleus tab with ≤10 protons.
+function getParticleLabels() {
+  const N = particles.length;
+  const labels = new Array(N).fill('');
+  if (arrowMode !== 1 || groupSelectMode) return labels;
+  let protonCount = 0;
+  for (let i = 0; i < N; i++) if (particles[i].type === 'proton') protonCount++;
+  if (protonCount > 10) return labels;
+  let pIdx = 0;
+  for (let i = 0; i < N; i++) {
+    if (particles[i].type === 'proton') {
+      labels[i] = String.fromCharCode(65 + pIdx); // A, B, …, Z
+      pIdx++;
+    }
+  }
+  if (selectedParticle !== null && selectedParticle < N) {
+    const sel = particles[selectedParticle];
+    const cutoff = strongCutoff();
+    const cutoffSq = cutoff * cutoff;
+    let nIdx = 0;
+    for (let i = 0; i < N; i++) {
+      if (i === selectedParticle) continue;
+      if (particles[i].type !== 'neutron') continue;
+      const dx = particles[i].x - sel.x;
+      const dy = particles[i].y - sel.y;
+      if (dx * dx + dy * dy < cutoffSq) {
+        nIdx++;
+        labels[i] = String(nIdx);
+      }
+    }
+  }
+  return labels;
+}
+
+// Draw a label just past an arrow's tip so the user can see which other
+// particle is the source of that force arrow. Proton letters render in light
+// pink so they read as "from a proton" at a glance; neutron numbers stay white.
+const PROTON_LABEL_COLOR  = '#ffb6c1';
+const NEUTRON_LABEL_COLOR = 'rgba(255,255,255,0.95)';
+function isProtonLabel(label) { return /^[A-Z]/.test(label); }
+function drawLabelAt(c, lx, ly, label) {
+  const LIGHT = document.body.classList.contains('screenshot-mode');
+  c.save();
+  c.font = 'bold 14px Lexend, sans-serif';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  if (LIGHT) {
+    c.fillStyle = '#000';
+    c.fillText(label, lx, ly);
+  } else {
+    c.lineWidth = 3;
+    c.strokeStyle = 'rgba(0,0,0,0.85)';
+    c.strokeText(label, lx, ly);
+    c.fillStyle = isProtonLabel(label) ? PROTON_LABEL_COLOR : NEUTRON_LABEL_COLOR;
+    c.fillText(label, lx, ly);
+  }
+  c.restore();
+}
+function drawArrowLabel(c, fromX, fromY, nx, ny, len, label) {
+  if (!label || len < 6) return;
+  drawLabelAt(c, fromX + nx * len * 0.5 + (-ny) * 9, fromY + ny * len * 0.5 + nx * 9, label);
+}
+
+function drawArrowOnCtx(c, fromX, fromY, nx, ny, len, color, lw = 2) {
+  if (len < 1) return;
+  const midX = fromX + nx * len * 0.5, midY = fromY + ny * len * 0.5;
+  const tipX = fromX + nx * len,       tipY = fromY + ny * len;
+  const HEAD = Math.max(5, len * 0.18);
+  const perpX = -ny, perpY = nx;
+  const baseX = tipX - nx * HEAD, baseY = tipY - ny * HEAD;
+  c.strokeStyle = color; c.fillStyle = color;
+  c.save();
+  c.shadowColor = color; c.shadowBlur = 8;
+  c.lineWidth = lw; c.globalAlpha = 0.88; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(fromX, fromY);
+  c.quadraticCurveTo(midX, midY, baseX, baseY);
+  c.stroke();
+  c.beginPath();
+  c.moveTo(tipX, tipY);
+  c.lineTo(baseX + perpX * 8, baseY + perpY * 8);
+  c.lineTo(baseX - perpX * 8, baseY - perpY * 8);
+  c.closePath(); c.fill();
+  c.restore();
+  c.globalAlpha = 1; c.lineCap = 'butt';
+}
+
+const forcePanelEl  = document.getElementById('forcePanel');
+const forcePanelCv  = document.getElementById('forcePanelCanvas');
+const forcePanelCtx = forcePanelCv.getContext('2d');
+// Cached force-panel width — read at init and after each resize, to avoid
+// forcing a synchronous layout inside updateCam() which runs every frame.
+let _forcePanelWidth = forcePanelEl.offsetWidth;
+let fpZoom = 1.0;
+let _fpAutoScaleSel = null;
+
+// ---- Force panel resize ----
+let _fpResize = null;
+document.querySelectorAll('.fp-rh').forEach(h => {
+  h.addEventListener('mousedown', e => {
+    e.stopPropagation();
+    const rect = forcePanelEl.getBoundingClientRect();
+    forcePanelEl.style.width  = rect.width  + 'px';
+    forcePanelEl.style.height = rect.height + 'px';
+    _fpResize = { dir: h.dataset.dir, sx: e.clientX, sy: e.clientY,
+                  ow: rect.width, oh: rect.height };
+  });
+});
+
+window.addEventListener('mousemove', e => {
+  if (!_fpResize) return;
+  const { dir, sx, sy, ow, oh } = _fpResize;
+  const dx = e.clientX - sx, dy = e.clientY - sy;
+  let w = ow, h = oh;
+  // Panel is pinned right:0 so only left-edge and vertical handles resize width/height
+  if (dir.includes('w') || dir.includes('e')) w = Math.max(140, Math.min(canvas.width,  ow - dx));
+  if (dir.includes('s')) h = Math.max(140, Math.min(canvas.height, oh + dy));
+  if (dir.includes('n')) h = Math.max(140, Math.min(canvas.height, oh - dy));
+  forcePanelEl.style.width  = w + 'px';
+  forcePanelEl.style.height = h + 'px';
+  _forcePanelWidth = w;
+  // Resize canvas to fill panel minus header
+  const keyH = document.getElementById('forcePanelKey').offsetHeight;
+  const cw = Math.max(80, (w - 20)) | 0;
+  const ch = Math.max(80, (h - keyH - 26)) | 0;
+  if (forcePanelCv.width !== cw || forcePanelCv.height !== ch) {
+    forcePanelCv.width = cw;
+    forcePanelCv.height = ch;
+  }
+});
+
+window.addEventListener('mouseup', () => { _fpResize = null; });
+
+document.getElementById('fpZoomSlider').addEventListener('input', function() {
+  fpZoom = parseFloat(this.value);
+});
+
+function drawForcePanel() {
+  if (arrowMode === 0) { forcePanelEl.style.display = 'none'; return; }
+  forcePanelEl.style.display = 'block';
+  const _fpw = forcePanelEl.offsetWidth;
+  if (_fpw > 0 && _fpw !== _forcePanelWidth) _forcePanelWidth = _fpw;
+
+  const W = forcePanelCv.width, H = forcePanelCv.height;
+  const cx = W / 2, cy = H / 2;
+  const MAX_LEN = 36;
+  const refDist = PARTICLE_RADIUS * 2;
+
+  // Center on largest cluster (world coords)
+  const _clust = particles.length > 0 ? findBiggestCluster() : [];
+  const clusterCx = _clust.length ? _clust.reduce((s,p)=>s+p.x,0)/_clust.length : canvas.width/2;
+  const clusterCy = _clust.length ? _clust.reduce((s,p)=>s+p.y,0)/_clust.length : canvas.height/2;
+
+  // Deselect particles that have flown >50% off-canvas
+  const _cw = canvas.width, _ch = canvas.height;
+  const _offScreen = p => p.x < -_cw*0.5 || p.x > _cw*1.5 || p.y < -_ch*0.5 || p.y > _ch*1.5;
+  if (selectedParticle !== null && selectedParticle < particles.length && _offScreen(particles[selectedParticle])) {
+    selectedParticle = null;
+  }
+  if (selectedGroup.length > 0) {
+    selectedGroup = selectedGroup.filter(i => i < particles.length && !_offScreen(particles[i]));
+  }
+
+  // Autoscale fpZoom when selection or mode changes; user can then drag slider to override
+  const _selKey = (groupSelectMode ? 'g' : 's' + arrowMode) + ':' + (groupSelectMode ? selectedGroup.join(',') : selectedParticle);
+  if (_selKey !== _fpAutoScaleSel) {
+    _fpAutoScaleSel = _selKey;
+    const _avail = Math.min(W, H) / 2 - 16;
+    if (!groupSelectMode && arrowMode === 1) {
+      // Single, All forces: no autoscale — match main canvas zoom so particle appears same size
+      fpZoom = Math.max(0.1, Math.min(2.0, zoom));
+      document.getElementById('fpZoomSlider').value = fpZoom;
+    } else if (!groupSelectMode && arrowMode === 2 && selectedParticle !== null && selectedParticle < particles.length) {
+      // Single, Total force: autoscale based on actual net arrow magnitudes
+      const _pi = particles[selectedParticle];
+      const _cut = strongCutoff();
+      let _cFx = 0, _cFy = 0, _sFx = 0, _sFy = 0;
+      for (let _j = 0; _j < particles.length; _j++) {
+        if (_j === selectedParticle) continue;
+        const _pj = particles[_j];
+        const _dx = _pi.x - _pj.x, _dy = _pi.y - _pj.y;
+        const _d = Math.sqrt(_dx*_dx + _dy*_dy);
+        if (_d === 0) continue;
+        const _nx = _dx/_d, _ny = _dy/_d;
+        if (_pi.type === 'proton' && _pj.type === 'proton') {
+          const _l = MAX_LEN * (refDist / Math.max(_d, refDist)) * 2.4;
+          _cFx += _nx * _l; _cFy += _ny * _l;
+        }
+        if (!currentTabIsProton && _d < _cut) {
+          const _sl = MAX_LEN * (1 - _d/_cut) * 0.85 * 10;
+          _sFx -= _nx * _sl; _sFy -= _ny * _sl;
+        }
+      }
+      const _cMag = Math.sqrt(_cFx*_cFx + _cFy*_cFy);
+      const _sMag = Math.sqrt(_sFx*_sFx + _sFy*_sFy);
+      // Bounding box of particle + arrow tips (relative to particle center)
+      const _bxs = [-PARTICLE_RADIUS, PARTICLE_RADIUS], _bys = [-PARTICLE_RADIUS, PARTICLE_RADIUS];
+      if (_cMag > 0) { _bxs.push(_cFx/_cMag*(PARTICLE_RADIUS+_cMag)); _bys.push(_cFy/_cMag*(PARTICLE_RADIUS+_cMag)); }
+      if (_sMag > 0) { _bxs.push(_sFx/_sMag*(PARTICLE_RADIUS+_sMag)); _bys.push(_sFy/_sMag*(PARTICLE_RADIUS+_sMag)); }
+      const _bbMinX = Math.min(..._bxs), _bbMaxX = Math.max(..._bxs);
+      const _bbMinY = Math.min(..._bys), _bbMaxY = Math.max(..._bys);
+      const _hwX = (_bbMaxX - _bbMinX) / 2 + 8, _hwY = (_bbMaxY - _bbMinY) / 2 + 8;
+      fpZoom = Math.max(0.1, Math.min(2.0, Math.min((W/2 - 16) / _hwX, (H/2 - 16) / _hwY)));
+      document.getElementById('fpZoomSlider').value = fpZoom;
+    } else if (groupSelectMode && selectedGroup.length > 0) {
+      const _grp = selectedGroup.filter(i => i < particles.length);
+      if (arrowMode === 2 && _grp.length > 0) {
+        // Group total force: compute actual arrow magnitudes (including override) for autoscale
+        const _cZ = _clust.filter(p => p.type === 'proton').length;
+        const _cN = _clust.filter(p => p.type === 'neutron').length;
+        const _gZ = _grp.filter(i => particles[i].type === 'proton').length;
+        const _gN = _grp.filter(i => particles[i].type === 'neutron').length;
+        const _gSet = new Set(_grp), _cut2 = strongCutoff();
+        let _cFx2 = 0, _cFy2 = 0, _sFx2 = 0, _sFy2 = 0;
+        for (const i of _grp) {
+          const _pi2 = particles[i];
+          for (let j = 0; j < particles.length; j++) {
+            if (_gSet.has(j)) continue;
+            const _pj2 = particles[j];
+            const _dx2 = _pi2.x - _pj2.x, _dy2 = _pi2.y - _pj2.y;
+            const _d2 = Math.sqrt(_dx2*_dx2 + _dy2*_dy2);
+            if (_d2 === 0) continue;
+            const _nx2 = _dx2/_d2, _ny2 = _dy2/_d2;
+            if (_pi2.type === 'proton' && _pj2.type === 'proton') {
+              const _l2 = MAX_LEN * (refDist / Math.max(_d2, refDist)) * 2.4;
+              _cFx2 += _nx2 * _l2; _cFy2 += _ny2 * _l2;
+            }
+            if (!currentTabIsProton && _d2 < _cut2) {
+              const _sl2 = MAX_LEN * (1 - _d2/_cut2) * 0.85 * 10;
+              _sFx2 -= _nx2 * _sl2; _sFy2 -= _ny2 * _sl2;
+            }
+          }
+        }
+        // Apply same half-protons override
+        const _isHP2 = _cZ >= 2 && _gZ >= Math.round(_cZ*0.35) && _gZ <= Math.round(_cZ*0.65);
+        if (_isHP2) {
+          const _cML2 = Math.sqrt(_cFx2*_cFx2 + _cFy2*_cFy2);
+          const _wr2 = NUCLEUS_TABLE[_cZ];
+          if (_wr2 && _cN >= _wr2.minN && _cN <= _wr2.maxN) {
+            _sFx2 = -_cFx2; _sFy2 = -_cFy2;
+          } else if (_cML2 > 0) {
+            const _gr2 = NUCLEUS_TABLE[_gZ];
+            let _sc2 = 1.0;
+            if (_gr2) {
+              if (_gN < _gr2.minN) _sc2 = 1 - 2 * (_gr2.minN - _gN) / _cZ;
+              else if (_gN > _gr2.maxN) _sc2 = 1 + 2 * (_gN - _gr2.maxN) / _cZ;
+            }
+            _sFx2 = -_cFx2 * Math.max(0, _sc2); _sFy2 = -_cFy2 * Math.max(0, _sc2);
+          }
+        }
+        const _cM2 = Math.sqrt(_cFx2*_cFx2 + _cFy2*_cFy2);
+        const _sM2 = Math.sqrt(_sFx2*_sFx2 + _sFy2*_sFy2);
+        const _dL2 = (m) => _cZ > 2 ? Math.sqrt(m) * 6 : m;
+        // Group centroid in world space
+        let _gcx2 = 0, _gcy2 = 0;
+        for (const i of _grp) { _gcx2 += particles[i].x; _gcy2 += particles[i].y; }
+        _gcx2 /= _grp.length; _gcy2 /= _grp.length;
+        const _gcDist2 = Math.hypot(_gcx2 - clusterCx, _gcy2 - clusterCy);
+        // Extent = max of (particle positions) and (group centroid + arrow tip)
+        let _extent2 = PARTICLE_RADIUS;
+        for (const i of _grp)
+          _extent2 = Math.max(_extent2, Math.hypot(particles[i].x - clusterCx, particles[i].y - clusterCy) + PARTICLE_RADIUS);
+        if (_cM2 > 0.5) _extent2 = Math.max(_extent2, _gcDist2 + PARTICLE_RADIUS + _dL2(_cM2));
+        if (_sM2 > 0.5) _extent2 = Math.max(_extent2, _gcDist2 + PARTICLE_RADIUS + _dL2(_sM2));
+        fpZoom = Math.max(0.1, Math.min(2.0, (_avail - 8) / _extent2));
+        document.getElementById('fpZoomSlider').value = fpZoom;
+      } else {
+        // Group all-forces: particle positions + arrow estimate
+        const _extent = _grp.reduce((m, i) =>
+          Math.max(m, Math.hypot(particles[i].x - clusterCx, particles[i].y - clusterCy) + PARTICLE_RADIUS + 80), PARTICLE_RADIUS + 80);
+        fpZoom = Math.max(0.1, Math.min(2.0, _avail / _extent));
+        document.getElementById('fpZoomSlider').value = fpZoom;
+      }
+    }
+  }
+
+  // Pivot always at canvas center — single-particle mode draws its particle at (cx, cy)
+  const pivotX = cx, pivotY = cy;
+
+  forcePanelCtx.clearRect(0, 0, W, H);
+  forcePanelCtx.save();
+  forcePanelCtx.translate(pivotX * (1 - fpZoom), pivotY * (1 - fpZoom));
+  forcePanelCtx.scale(fpZoom, fpZoom);
+
+  // ---- Group selection mode ----
+  if (groupSelectMode) {
+    const group = selectedGroup.filter(i => i < particles.length);
+    if (group.length === 0) {
+      forcePanelCtx.restore();
+      forcePanelCtx.save();
+      forcePanelCtx.fillStyle = 'rgba(100,220,255,0.35)';
+      forcePanelCtx.font = '14px Lexend, sans-serif';
+      forcePanelCtx.textAlign = 'center';
+      forcePanelCtx.textBaseline = 'middle';
+      const lines = ['click and drag a box to group', 'particles as one system.', 'arrows show forces from', 'outside this system.'];
+      const lineH = 22;
+      const startY = cy - lineH * 1.5;
+      lines.forEach((ln, i) => forcePanelCtx.fillText(ln, cx, startY + i * lineH));
+      forcePanelCtx.restore();
+      return;
+    }
+
+    const t = currentTheme;
+    const cutoff = strongCutoff();
+
+    // Centroid of group (world coords)
+    let gcx = 0, gcy = 0;
+    for (const i of group) { gcx += particles[i].x; gcy += particles[i].y; }
+    gcx /= group.length; gcy /= group.length;
+
+    const baseRadius = PARTICLE_RADIUS;
+    const drawnRadius = baseRadius;
+
+    // Draw each particle positioned relative to the cluster centroid
+    const groupSet = new Set(group);
+    for (const i of group) {
+      const p = particles[i];
+      const px = cx + (p.x - clusterCx);
+      const py = cy + (p.y - clusterCy);
+      const isP = p.type === 'proton';
+      const PR = drawnRadius;
+      const baseGrad = forcePanelCtx.createRadialGradient(px, py, 0, px, py, PR * 1.1);
+      const mid = isP ? t.protonMid : t.neutronMid;
+      baseGrad.addColorStop(0, mid); baseGrad.addColorStop(0.82, mid); baseGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      forcePanelCtx.fillStyle = baseGrad;
+      forcePanelCtx.beginPath(); forcePanelCtx.arc(px, py, PR * 1.1, 0, Math.PI * 2); forcePanelCtx.fill();
+      const coreGrad = forcePanelCtx.createRadialGradient(px, py, 0, px, py, PR);
+      const core = isP ? t.protonCore : t.neutronCore;
+      coreGrad.addColorStop(0, core); coreGrad.addColorStop(0.5, core); coreGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      forcePanelCtx.globalAlpha = 0.82;
+      forcePanelCtx.fillStyle = coreGrad;
+      forcePanelCtx.beginPath(); forcePanelCtx.arc(px, py, PR, 0, Math.PI * 2); forcePanelCtx.fill();
+      forcePanelCtx.globalAlpha = 1;
+      if (isP) {
+        forcePanelCtx.fillStyle = 'rgba(255,255,255,0.88)';
+        forcePanelCtx.font = `bold ${Math.max(10, PR * 1.1)}px Lexend, sans-serif`;
+        forcePanelCtx.textAlign = 'center'; forcePanelCtx.textBaseline = 'middle';
+        forcePanelCtx.fillText('+', px, py + 1);
+      }
+    }
+
+    const PR = drawnRadius;
+    const SIDE_OFF = 3; // px perpendicular offset so parallel arrows don't overlap
+
+    if (arrowMode === 1) {
+      // Per-source arrows anchored at each individual group particle
+      for (const i of group) {
+        const pi = particles[i];
+        const px = cx + (pi.x - clusterCx);
+        const py = cy + (pi.y - clusterCy);
+        for (let j = 0; j < particles.length; j++) {
+          if (groupSet.has(j)) continue;
+          const pj = particles[j];
+          const dx = pi.x - pj.x, dy = pi.y - pj.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist === 0) continue;
+          const nx = dx / dist, ny = dy / dist;
+          if (pi.type === 'proton' && pj.type === 'proton') {
+            const len = MAX_LEN * (refDist / Math.max(dist, refDist)) * 2.4;
+            drawArrowOnCtx(forcePanelCtx, px + nx * drawnRadius, py + ny * drawnRadius, nx, ny, len, ELEC_ARROW_COLOR, 2);
+          }
+          if (!currentTabIsProton && dist < cutoff) {
+            const slen = MAX_LEN * (1 - dist / cutoff) * 0.85 * 10;
+            drawArrowOnCtx(forcePanelCtx, px - nx * drawnRadius, py - ny * drawnRadius, -nx, -ny, slen, STRONG_ARROW_COLOR, 2);
+          }
+        }
+      }
+    } else {
+      // Total force mode: one net Coulomb + one net strong arrow for the whole group
+      let cFx = 0, cFy = 0, sFx = 0, sFy = 0;
+      for (const i of group) {
+        const pi = particles[i];
+        for (let j = 0; j < particles.length; j++) {
+          if (groupSet.has(j)) continue;
+          const pj = particles[j];
+          const dx = pi.x - pj.x, dy = pi.y - pj.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist === 0) continue;
+          const nx = dx / dist, ny = dy / dist;
+          if (pi.type === 'proton' && pj.type === 'proton') {
+            const len = MAX_LEN * (refDist / Math.max(dist, refDist)) * 2.4;
+            cFx += nx * len; cFy += ny * len;
+          }
+          if (!currentTabIsProton && dist < cutoff) {
+            const slen = MAX_LEN * (1 - dist / cutoff) * 0.85 * 10;
+            sFx += -nx * slen; sFy += -ny * slen;
+          }
+        }
+      }
+      // ── Half-protons balance override ──────────────────────────────────────
+      // If the selected group contains roughly half the cluster's protons,
+      // override the strong arrow so it reflects stability rather than raw physics.
+      const _clusterZ = _clust.filter(p => p.type === 'proton').length;
+      const _clusterN = _clust.filter(p => p.type === 'neutron').length;
+      const _groupZ   = group.filter(i => particles[i].type === 'proton').length;
+      const _groupN   = group.filter(i => particles[i].type === 'neutron').length;
+      const _isHalfP  = _clusterZ >= 2 &&
+                        _groupZ >= Math.round(_clusterZ * 0.35) &&
+                        _groupZ <= Math.round(_clusterZ * 0.65);
+      if (_isHalfP) {
+        const _cMagL    = Math.sqrt(cFx * cFx + cFy * cFy);
+        const _wholeRow = NUCLEUS_TABLE[_clusterZ];
+        const _wholeStable = _wholeRow &&
+                             _clusterN >= _wholeRow.minN && _clusterN <= _wholeRow.maxN;
+        if (_wholeStable) {
+          // Whole nucleus is stable: strong exactly opposes Coulomb
+          sFx = -cFx; sFy = -cFy;
+        } else if (_cMagL > 0) {
+          // Whole nucleus is unstable: scale based on partial group's Z/N vs table
+          const _groupRow = NUCLEUS_TABLE[_groupZ];
+          let _scale = 1.0;
+          if (_groupRow) {
+            if (_groupN < _groupRow.minN) {
+              _scale = 1 - 2 * (_groupRow.minN - _groupN) / _clusterZ;   // neutron-deficient → shorter (2× effect)
+            } else if (_groupN > _groupRow.maxN) {
+              _scale = 1 + 2 * (_groupN - _groupRow.maxN) / _clusterZ;   // neutron-excess → longer (2× effect)
+            }
+            // group itself in stable band → _scale stays 1.0
+          }
+          _scale = Math.max(0, _scale);
+          sFx = -cFx * _scale; sFy = -cFy * _scale;
+        }
+      }
+      // ── end override ───────────────────────────────────────────────────────
+
+      const cMag = Math.sqrt(cFx * cFx + cFy * cFy);
+      const sMag = Math.sqrt(sFx * sFx + sFy * sFy);
+      // Both arrows originate from group centroid in panel space
+      const gPx = cx + (gcx - clusterCx);
+      const gPy = cy + (gcy - clusterCy);
+      // For nuclei with >2 protons, compress display lengths with sqrt to keep
+      // arrows proportionate — ratio between arrows is preserved so balance still reads correctly.
+      const _dispLen = (mag) => _clusterZ > 2 ? Math.sqrt(mag) * 6 : mag;
+      if (cMag > 0.5) {
+        const cnx = cFx / cMag, cny = cFy / cMag;
+        const ox = -cny * SIDE_OFF, oy = cnx * SIDE_OFF;
+        drawArrowOnCtx(forcePanelCtx, gPx + cnx * drawnRadius + ox, gPy + cny * drawnRadius + oy, cnx, cny, _dispLen(cMag), ELEC_ARROW_COLOR, 3);
+      }
+      if (sMag > 0.5) {
+        const snx = sFx / sMag, sny = sFy / sMag;
+        const ox = sny * SIDE_OFF, oy = -snx * SIDE_OFF;
+        drawArrowOnCtx(forcePanelCtx, gPx + snx * drawnRadius + ox, gPy + sny * drawnRadius + oy, snx, sny, _dispLen(sMag), STRONG_ARROW_COLOR, 3);
+      }
+    }
+
+    forcePanelCtx.restore();
+    // Group label: draw in screen coords so it doesn't zoom, positioned just above the group
+    const _sGcx = cx + fpZoom * (gcx - clusterCx);
+    const _minGy = group.reduce((m, i) => Math.min(m, particles[i].y), Infinity);
+    const _sGty = cy + fpZoom * (_minGy - clusterCy - PARTICLE_RADIUS) - 4;
+    // Draw colored group counter: (pink Zp + grey Nn = blue total)
+    const _gZ2 = group.filter(i => particles[i].type === 'proton').length;
+    const _gN2 = group.length - _gZ2;
+    forcePanelCtx.font = '9px Lexend, sans-serif';
+    forcePanelCtx.textBaseline = 'bottom'; forcePanelCtx.textAlign = 'left';
+    const _glParts = [
+      { text: '(', color: 'rgba(150,150,180,0.6)' },
+      { text: `${_gZ2}p`, color: 'rgba(255,100,150,0.85)' },
+      { text: ' + ', color: 'rgba(150,150,180,0.6)' },
+      { text: `${_gN2}n`, color: 'rgba(170,170,170,0.8)' },
+      { text: ' = ', color: 'rgba(150,150,180,0.6)' },
+      { text: `${group.length}`, color: 'rgba(100,220,255,0.85)' },
+      { text: ')', color: 'rgba(150,150,180,0.6)' },
+    ];
+    const _glW = _glParts.reduce((s, p) => s + forcePanelCtx.measureText(p.text).width, 0);
+    let _glX = _sGcx - _glW / 2;
+    for (const _glP of _glParts) {
+      forcePanelCtx.fillStyle = _glP.color;
+      forcePanelCtx.fillText(_glP.text, _glX, _sGty);
+      _glX += forcePanelCtx.measureText(_glP.text).width;
+    }
+    if (arrowMode === 2) {
+      forcePanelCtx.fillStyle = 'rgba(150,150,180,0.5)';
+      forcePanelCtx.font = '8px Lexend, sans-serif';
+      forcePanelCtx.textAlign = 'right'; forcePanelCtx.textBaseline = 'bottom';
+      forcePanelCtx.fillText('total arrow length not to scale', W - 5, H - 4);
+    }
+    return;
+  }
+
+  // ---- Single particle mode (default) ----
+  if (selectedParticle === null || selectedParticle >= particles.length) {
+    forcePanelCtx.fillStyle = 'rgba(255,255,255,0.2)';
+    forcePanelCtx.font = '10px Lexend, sans-serif';
+    forcePanelCtx.textAlign = 'center';
+    forcePanelCtx.textBaseline = 'middle';
+    forcePanelCtx.fillText('click a particle', cx, cy);
+    forcePanelCtx.restore();
+    return;
+  }
+
+  const pi = particles[selectedParticle];
+  const isProton = pi.type === 'proton';
+  const t = currentTheme;
+  const PR = PARTICLE_RADIUS;
+
+  // Collect jitter offset (tiny, but keep for consistency)
+  const jx = jitter[selectedParticle] ? jitter[selectedParticle].x : 0;
+  const jy = jitter[selectedParticle] ? jitter[selectedParticle].y : 0;
+
+  // Build force vectors first so we can compute vizScale before drawing anything
+  const coulombVecs = [], strongVecs = [];
+  const cutoff = strongCutoff();
+
+  for (let j = 0; j < particles.length; j++) {
+    if (j === selectedParticle) continue;
+    const pj = particles[j];
+    const dx = pi.x - pj.x, dy = pi.y - pj.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist === 0) continue;
+    const nx = dx / dist, ny = dy / dist;
+    if (isProton && pj.type === 'proton') {
+      const len = MAX_LEN * (refDist / Math.max(dist, refDist)) * 2.4;
+      coulombVecs.push({ nx, ny, len, srcIdx: j });
+    }
+    if (!currentTabIsProton && dist < cutoff) {
+      const slen = MAX_LEN * (1 - dist / cutoff) * 0.85 * 10;
+      strongVecs.push({ nx: -nx, ny: -ny, len: slen, srcIdx: j });
+    }
+  }
+
+  const sPR = PR;
+
+  // In total force mode, shift the particle so the bounding box of (particle + arrows) is centered
+  let _bbOX = 0, _bbOY = 0;
+  if (arrowMode === 2) {
+    const _cSX = coulombVecs.reduce((s, v) => s + v.nx * v.len, 0);
+    const _cSY = coulombVecs.reduce((s, v) => s + v.ny * v.len, 0);
+    const _sSX = strongVecs.reduce((s, v) => s + v.nx * v.len, 0);
+    const _sSY = strongVecs.reduce((s, v) => s + v.ny * v.len, 0);
+    const _cM = Math.sqrt(_cSX*_cSX + _cSY*_cSY);
+    const _sM = Math.sqrt(_sSX*_sSX + _sSY*_sSY);
+    const _bx = [-PR, PR], _by = [-PR, PR];
+    if (_cM > 0) { _bx.push(_cSX/_cM*(PR+_cM)); _by.push(_cSY/_cM*(PR+_cM)); }
+    if (_sM > 0) { _bx.push(_sSX/_sM*(PR+_sM)); _by.push(_sSY/_sM*(PR+_sM)); }
+    _bbOX = (Math.min(..._bx) + Math.max(..._bx)) / 2;
+    _bbOY = (Math.min(..._by) + Math.max(..._by)) / 2;
+  }
+
+  // Selected particle draws at panel center minus bounding box offset
+  const sppx = cx - _bbOX + jx;
+  const sppy = cy - _bbOY + jy;
+
+  // Draw particle at scaled size
+  const baseR2 = sPR * 1.1;
+  const baseGrad2 = forcePanelCtx.createRadialGradient(sppx, sppy, 0, sppx, sppy, baseR2);
+  if (isProton) {
+    baseGrad2.addColorStop(0, t.protonMid); baseGrad2.addColorStop(0.82, t.protonMid); baseGrad2.addColorStop(1, 'rgba(0,0,0,0)');
+  } else {
+    baseGrad2.addColorStop(0, t.neutronMid); baseGrad2.addColorStop(0.82, t.neutronMid); baseGrad2.addColorStop(1, 'rgba(0,0,0,0)');
+  }
+  forcePanelCtx.fillStyle = baseGrad2;
+  forcePanelCtx.beginPath(); forcePanelCtx.arc(sppx, sppy, baseR2, 0, Math.PI * 2); forcePanelCtx.fill();
+  const innerGlow2 = forcePanelCtx.createRadialGradient(sppx, sppy, 0, sppx, sppy, sPR);
+  const coreCol2 = isProton ? t.protonCore : t.neutronCore;
+  innerGlow2.addColorStop(0, coreCol2); innerGlow2.addColorStop(0.5, coreCol2); innerGlow2.addColorStop(1, 'rgba(0,0,0,0)');
+  forcePanelCtx.globalAlpha = 0.82;
+  forcePanelCtx.fillStyle = innerGlow2;
+  forcePanelCtx.beginPath(); forcePanelCtx.arc(sppx, sppy, sPR, 0, Math.PI * 2); forcePanelCtx.fill();
+  forcePanelCtx.globalAlpha = 1;
+  forcePanelCtx.font = `bold ${Math.max(10, sPR * 1.1) + 3}px Lexend, sans-serif`;
+  forcePanelCtx.textAlign = 'center'; forcePanelCtx.textBaseline = 'middle';
+  const __spLabels = getParticleLabels();
+  const __selLab = __spLabels[selectedParticle];
+  if (__selLab) {
+    forcePanelCtx.fillStyle = isProtonLabel(__selLab) ? PROTON_LABEL_COLOR : NEUTRON_LABEL_COLOR;
+    forcePanelCtx.fillText(__selLab, sppx, sppy + 1);
+  } else if (isProton) {
+    forcePanelCtx.fillStyle = 'rgba(255,255,255,0.88)';
+    forcePanelCtx.fillText('+', sppx, sppy + 1);
+  }
+
+  if (arrowMode === 1) {
+    const labelItems = [];
+    coulombVecs.forEach(v => {
+      const drawnLen = v.len;
+      if (drawnLen < 5) return;
+      const fx = sppx + v.nx * sPR, fy = sppy + v.ny * sPR;
+      drawArrowOnCtx(forcePanelCtx, fx, fy, v.nx, v.ny, drawnLen, ELEC_ARROW_COLOR, 3);
+      const lbl = __spLabels[v.srcIdx];
+      if (lbl && drawnLen >= 6) labelItems.push({
+        bx: fx + v.nx * drawnLen * 0.5 + (-v.ny) * 9,
+        by: fy + v.ny * drawnLen * 0.5 + v.nx * 9,
+        nx: v.nx, ny: v.ny, label: lbl, shift: 0
+      });
+    });
+    if (!currentTabIsProton) strongVecs.forEach(v => {
+      const drawnLen = v.len;
+      const fx = sppx + v.nx * sPR, fy = sppy + v.ny * sPR;
+      drawArrowOnCtx(forcePanelCtx, fx, fy, v.nx, v.ny, drawnLen, STRONG_ARROW_COLOR, 3);
+      const lbl = __spLabels[v.srcIdx];
+      if (lbl && drawnLen >= 6) labelItems.push({
+        bx: fx + v.nx * drawnLen * 0.5 + (-v.ny) * 9,
+        by: fy + v.ny * drawnLen * 0.5 + v.nx * 9,
+        nx: v.nx, ny: v.ny, label: lbl, shift: 0
+      });
+    });
+    // Push overlapping labels apart along their own arrow direction
+    const R = 9;
+    for (let iter = 0; iter < 12; iter++) {
+      for (let i = 0; i < labelItems.length; i++) {
+        for (let j = i + 1; j < labelItems.length; j++) {
+          const a = labelItems[i], b = labelItems[j];
+          const ax = a.bx + a.nx * a.shift, ay = a.by + a.ny * a.shift;
+          const bx = b.bx + b.nx * b.shift, by = b.by + b.ny * b.shift;
+          const dx = ax - bx, dy = ay - by;
+          const dist2 = dx*dx + dy*dy;
+          if (dist2 < (R*2)*(R*2) && dist2 > 0) {
+            const dist = Math.sqrt(dist2);
+            const push = (R * 2 - dist) * 0.5;
+            const dotA =   dx/dist * a.nx + dy/dist * a.ny;
+            const dotB = (-dx)/dist * b.nx + (-dy)/dist * b.ny;
+            a.shift += push * (dotA >= 0 ? 1 : -1);
+            b.shift += push * (dotB >= 0 ? 1 : -1);
+          }
+        }
+      }
+    }
+    labelItems.forEach(item =>
+      drawLabelAt(forcePanelCtx, item.bx + item.nx * item.shift, item.by + item.ny * item.shift, item.label)
+    );
+  } else {
+    const sum = (vecs) => vecs.reduce((a, v) => ({ x: a.x + v.nx * v.len, y: a.y + v.ny * v.len }), { x: 0, y: 0 });
+    const drawNet = (vec, color, scale = x => x) => {
+      const mag = Math.sqrt(vec.x * vec.x + vec.y * vec.y);
+      const len = scale(mag);
+      if (len < 1) return;
+      drawArrowOnCtx(forcePanelCtx, sppx + (vec.x/mag) * sPR, sppy + (vec.y/mag) * sPR, vec.x/mag, vec.y/mag, len, color, 3);
+    };
+    const cSum = sum(coulombVecs), sSum = sum(strongVecs);
+    drawNet(cSum, ELEC_ARROW_COLOR);
+    if (!currentTabIsProton) drawNet(sSum, STRONG_ARROW_COLOR);
+  }
+  forcePanelCtx.restore();
+  if (arrowMode === 2) {
+    forcePanelCtx.fillStyle = 'rgba(150,150,180,0.5)';
+    forcePanelCtx.font = '8px Lexend, sans-serif';
+    forcePanelCtx.textAlign = 'right'; forcePanelCtx.textBaseline = 'bottom';
+    forcePanelCtx.fillText('total arrow length not to scale', W - 5, H - 4);
+  }
+}
+
+// ============================================================
+//  MAIN DRAW
+//  Render order (back to front):
+//    1. Coulomb field visualization (ribbon or cloud)
+//    2. All particle bodies
+//
+//  Everything is drawn inside a centered zoom transform so the
+//  zoom slider scales visuals without touching physics coordinates.
+// ============================================================
+// Camera offset (screen pixels) — shifts the zoom pivot so the biggest cluster
+// is centered in the available space (left of force panel horizontally, full canvas vertically).
+let camX = 0, camY = 0;
+
+// Compute camX/camY instantly (no lerp). Uses findBiggestCluster() which already exists.
+function updateCam() {
+  const cluster = particles.length > 0 ? findBiggestCluster() : [];
+  if (cluster.length === 0) { camX = 0; camY = 0; return; }
+
+  let cx = 0, cy = 0;
+  for (const p of cluster) { cx += p.x; cy += p.y; }
+  cx /= cluster.length; cy /= cluster.length;
+
+  const fpW = (arrowMode > 0) ? _forcePanelWidth : 0;
+  const availW = canvas.width - fpW;
+  const toolbarH   = document.getElementById('toolbar').offsetHeight;
+  const visibleCy  = toolbarH + (canvas.height - toolbarH) / 2;
+  camX = availW / 2 - (zoom * (cx - canvas.width  / 2) + canvas.width  / 2);
+  camY = visibleCy  - (zoom * (cy - canvas.height / 2) + canvas.height / 2);
+}
+
+function draw() {
+  const _lagDrawT0 = performance.now();
+  const LIGHT = document.body.classList.contains('screenshot-mode');
+  if (LIGHT) {
+    ctx.fillStyle = document.getElementById('bgColorPicker').value || '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Heatmaps render in screen space before the zoom transform.
+  if ((showElectricField || showStrongField) && particles.length >= 2) drawCombinedHeatmap();
+
+  // Centered zoom with camera offset
+  const _cx = canvas.width / 2, _cy = canvas.height / 2;
+  ctx.save();
+  ctx.translate(_cx + camX, _cy + camY);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-_cx, -_cy);
+
+  ensureJitter();
+  const __labels = getParticleLabels();
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    const isProton = p.type === 'proton';
+    const jx = jitter[i] ? jitter[i].x : 0;
+    const jy = jitter[i] ? jitter[i].y : 0;
+    const px = p.x + jx, py = p.y + jy;
+
+    // Unstable neutron: pulsing red glow
+    if (p.unstable && currentTab === 'nucleus') {
+      const now = performance.now();
+      let timerProgress = 0;
+      if (quantumTimerStartAt !== null && quantumEjectAt !== null) {
+        timerProgress = Math.min(1, (now - quantumTimerStartAt) / (quantumEjectAt - quantumTimerStartAt));
+      }
+      const pulse  = 0.5 + 0.5 * Math.sin(now / 180);
+      const glowR  = PARTICLE_RADIUS + 5 + pulse * 3 + timerProgress * 10;
+      const alpha  = 0.35 + timerProgress * 0.55 + pulse * 0.1;
+      const glow   = ctx.createRadialGradient(px, py, PARTICLE_RADIUS * 0.4, px, py, glowR);
+      glow.addColorStop(0, `rgba(255,60,40,${Math.min(1, alpha).toFixed(2)})`);
+      glow.addColorStop(1, 'rgba(255,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(px, py, glowR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const t = currentTheme;
+
+    // Flat base circle — solid mid color, soft edge fade
+    const baseR = PARTICLE_RADIUS * 1.1;
+    const baseGrad = ctx.createRadialGradient(px, py, 0, px, py, baseR);
+    if (isProton) {
+      baseGrad.addColorStop(0,    t.protonMid);
+      baseGrad.addColorStop(0.82, t.protonMid);
+      baseGrad.addColorStop(1,    'rgba(0,0,0,0)');
+    } else {
+      baseGrad.addColorStop(0,    t.neutronMid);
+      baseGrad.addColorStop(0.82, t.neutronMid);
+      baseGrad.addColorStop(1,    'rgba(0,0,0,0)');
+    }
+    ctx.fillStyle = baseGrad;
+    ctx.beginPath();
+    ctx.arc(px, py, baseR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner glow — bright centered bloom, fades outward
+    const innerGlow = ctx.createRadialGradient(px, py, 0, px, py, PARTICLE_RADIUS);
+    const coreColor = isProton ? t.protonCore : t.neutronCore;
+    innerGlow.addColorStop(0,   coreColor);
+    innerGlow.addColorStop(0.5, coreColor);
+    innerGlow.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.82;
+    ctx.fillStyle = innerGlow;
+    ctx.beginPath();
+    ctx.arc(px, py, PARTICLE_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Label
+    ctx.font = 'bold 11px Lexend, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const __lab = __labels[i];
+    if (__lab) {
+      ctx.fillStyle = isProtonLabel(__lab) ? PROTON_LABEL_COLOR : NEUTRON_LABEL_COLOR;
+      ctx.fillText(__lab, px, py + 1);
+    } else if (isProton) {
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.fillText('+', px, py + 1);
+    }
+  }
+
+  // Selection rings — drawn after all particles so they're never covered
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    const jx = jitter[i] ? jitter[i].x : 0;
+    const jy = jitter[i] ? jitter[i].y : 0;
+    const px = p.x + jx, py = p.y + jy;
+    const inGroup = groupSelectMode && selectedGroup.includes(i);
+    if (inGroup || (!groupSelectMode && i === selectedParticle && arrowMode > 0)) {
+      ctx.beginPath();
+      ctx.arc(px, py, PARTICLE_RADIUS + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = inGroup ? 'rgba(100,220,255,0.7)' : currentTheme.accent2;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  // Ejection flashes — fixed position at ejection site
+  if (currentTab === 'nucleus') {
+    const now = performance.now();
+    quantumFlashes = quantumFlashes.filter(f => {
+      const age = now - f.startTime;
+      if (age > 350) return false;
+      const t = age / 350;
+      const r = PARTICLE_RADIUS + t * PARTICLE_RADIUS * 3;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,180,80,${(1 - t).toFixed(2)})`;
+      ctx.lineWidth = 3 * (1 - t);
+      ctx.stroke();
+      return true;
+    });
+  }
+
+  // Rubber-band selection box (drawn in world space, before restore)
+  if (groupSelectMode && selBox) {
+    const bx = Math.min(selBox.x1, selBox.x2), by = Math.min(selBox.y1, selBox.y2);
+    const bw = Math.abs(selBox.x2 - selBox.x1), bh = Math.abs(selBox.y2 - selBox.y1);
+    ctx.fillStyle = 'rgba(100,220,255,0.08)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = 'rgba(100,220,255,0.75)';
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([5 / zoom, 4 / zoom]);
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+  drawForcePanel();
+
+  // ── Lag EMA: measure actual draw time ──
+  { const _dt = performance.now() - _lagDrawT0;
+    _lagEma = _lagEma * 0.9 + _dt * 0.1;
+    const det = _lagEma > 40;
+    _lagDetected = det;
+  }
+}
+
+// ============================================================
+//  TIME SCRUBBER
+// ============================================================
+function renderFrame(idx) {
+  const frame = _histGet(idx);
+  if (!frame) return;
+  const savedParticles = particles;
+  const savedDragging  = dragging;
+  const savedFlashes   = quantumFlashes;
+  particles = _restoreParticles(frame);
+  dragging  = null;
+  quantumFlashes = [];
+  // Match live behavior: when centerTracking is on, recenter the camera on the
+  // historical frame's biggest cluster so the clump stays put during replay /
+  // time-slider scrubbing instead of being frozen at the last live camera pos.
+  if (centerTracking) updateCam();
+  draw();
+  _cachedBiggestCluster = null; // particles changed; cache is stale
+  updateStats();
+  particles      = savedParticles;
+  dragging       = savedDragging;
+  quantumFlashes = savedFlashes;
+  _cachedBiggestCluster = null; // restored to live particles; invalidate again
+}
+
+timeSlider.addEventListener('input', () => {
+  // Stop any running animation so the user can scrub freely
+  if (running || replaying) {
+    running = false;
+    replaying = false;
+    cancelAnimationFrame(animId);
+    goBtn.textContent = '▶ GO';
+    goBtn.classList.remove('running');
+  }
+  const val = parseInt(timeSlider.value);
+  scrubFrame = val;
+  updateFrameCounter(val + 1, _histLen);
+  renderFrame(val);
+});
+
+// ============================================================
+//  ANIMATION LOOP
+//  Three modes:
+//    replaying  — auto-advance scrubFrame through recorded history
+//    scrubFrame >= 0 — user is scrubbing; prevents live history from advancing
+//                      (scrubFrame is set by the time-slider input handler)
+//    live physics — step sim, record history, auto-stop when empty
+// ============================================================
+function loop() {
+  if (!running) return;
+
+  // ── Frame throttle when lag detected (EMA measured in draw()) ──
+  _lagSkip++;
+  if (_lagDetected && _lagSkip % 4 !== 0) { animId = requestAnimationFrame(loop); return; }
+
+  // ── Replay mode: play back recorded history automatically ──
+  if (replaying) {
+    // Advance (currentSpeed / recordedSpeed) frames per RAF.
+    // recordedSpeed cancels out the motion density baked into each recorded frame,
+    // so only the current slider value determines visual replay speed.
+    replayAccum += speed / recordedSpeed;
+    const steps = Math.floor(replayAccum);
+    replayAccum -= steps;
+    scrubFrame = Math.min(scrubFrame + steps, _histLen - 1);
+    if (scrubFrame >= _histLen - 1) {
+      // Reached end of recording — stop
+      running = false;
+      replaying = false;
+      replayAccum = 0;
+      goBtn.textContent = '▶ GO';
+      goBtn.classList.remove('running');
+      timeSlider.value = scrubFrame;
+      updateFrameCounter(scrubFrame + 1, _histLen);
+        renderFrame(scrubFrame);
+      return;
+    }
+    timeSlider.value = scrubFrame;
+    updateFrameCounter(scrubFrame + 1, _histLen);
+    renderFrame(scrubFrame);
+    animId = requestAnimationFrame(loop);
+    return;
+  }
+
+  // ── Live physics ──
+  loopFrame++;
+  applyBiggestClusterStability();
+  updateQuantumStability();
+  if (centerTracking) updateCam();
+  step(speed);
+  computeEnergy();
+  updateStats();
+
+  _histPush(_snapshotParticles(particles));
+
+  if (timeSlider.disabled !== false) timeSlider.disabled = false;
+  const _newMax = String(_histLen - 1);
+  if (timeSlider.max !== _newMax) timeSlider.max = _newMax;
+  if (timeSlider.value !== _newMax) timeSlider.value = _newMax;
+  updateFrameCounter(null, _histLen);
+
+  draw();
+
+  // Remove particles that have left the visible screen by more than 30%.
+  // Threshold is in screen space so zoom level determines how far particles
+  // travel in physics coords before being culled.
+  {
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const mw   = canvas.width  * 0.3;
+    const mh   = canvas.height * 0.3;
+    const mhDn = mh * 2.0;   // 2× margin before culling particles that exit downward
+    if (currentTab === 'nucleus') {
+      // Never remove bound (non-ejected) nucleus particles even if they drift off-screen.
+      // Only allocate a new array when at least one ejected particle is actually out of bounds.
+      const hasOutOfBounds = particles.some(p => {
+        if (!p.ejected) return false;
+        const sx = zoom * (p.x - cx) + cx;
+        const sy = zoom * (p.y - cy) + cy;
+        return !(sx > -mw && sx < canvas.width + mw && sy > -mh && sy < canvas.height + mhDn);
+      });
+      if (hasOutOfBounds) {
+        particles = particles.filter(p => {
+          if (!p.ejected) return true;
+          const sx = zoom * (p.x - cx) + cx;
+          const sy = zoom * (p.y - cy) + cy;
+          return sx > -mw && sx < canvas.width  + mw &&
+                 sy > -mh && sy < canvas.height + mhDn;
+        });
+      }
+    } else {
+      const kept = [];
+      let newDragging = null;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        const sx = zoom * (p.x - cx) + cx;
+        const sy = zoom * (p.y - cy) + cy;
+        if (sx > -mw && sx < canvas.width  + mw &&
+            sy > -mh && sy < canvas.height + mhDn) {
+          if (i === dragging) newDragging = kept.length;
+          kept.push(p);
+        }
+      }
+      particles = kept;
+      dragging  = newDragging;
+    }
+  }
+
+  // Auto-stop when all particles have escaped off-screen
+  if (particles.length === 0) {
+    running = false;
+    goBtn.textContent = '▶ GO';
+    goBtn.classList.remove('running');
+    return;
+  }
+
+  // Auto-stop when history is full so the beginning is never overwritten
+  if (_histLen >= MAX_HISTORY) {
+    running = false;
+    goBtn.textContent = '▶ GO';
+    goBtn.classList.remove('running');
+    return;
+  }
+
+  animId = requestAnimationFrame(loop);
+}
+
+// ============================================================
+//  THEME SWITCHER
+//
+//  Three themes — protons always hot pink (accent1).
+//  accent2 = UI label / slider color ("letters").
+//  Neutron colors vary per theme.
+//
+//  currentThemeKey is serialised into captureSimState() so
+//  notepad playback can faithfully restore the visual theme.
+// ============================================================
+const THEMES = {
+  // A: Blue labels + grey neutrons  (matches :root CSS defaults)
+  A: {
+    accent1:'#ff2d78', accent1dim:'rgba(255,45,120,0.25)', accent1glow:'rgba(255,45,120,0.55)',
+    accent2:'#1a6eff', accent2dim:'rgba(26,110,255,0.18)',  accent2glow:'rgba(26,110,255,0.45)',
+    uibg:'rgba(8,6,24,0.38)', uiborder:'rgba(255,255,255,0.07)',
+    textdim:'rgba(220,215,255,0.55)', textbright:'rgba(240,235,255,0.92)',
+    speck:'rgba(180,130,255,0.35)',
+    protonCore:'#ff80b0', protonMid:'#ff1a65', protonEdge:'#7a0030',
+    neutronCore:'#b0b0c4', neutronMid:'#70707f', neutronEdge:'#383848',
+    bg:'#05040f',
+  },
+  // B: Purple labels + purple neutrons
+  B: {
+    accent1:'#ff2d78', accent1dim:'rgba(255,45,120,0.22)', accent1glow:'rgba(255,45,120,0.5)',
+    accent2:'#bd00ff', accent2dim:'rgba(189,0,255,0.18)',  accent2glow:'rgba(189,0,255,0.42)',
+    uibg:'rgba(8,4,22,0.42)', uiborder:'rgba(189,0,255,0.14)',
+    textdim:'rgba(230,200,255,0.52)', textbright:'rgba(248,232,255,0.92)',
+    speck:'rgba(180,60,240,0.28)',
+    protonCore:'#ff80b0', protonMid:'#ff1a65', protonEdge:'#7a0030',
+    neutronCore:'#b0b0c4', neutronMid:'#70707f', neutronEdge:'#383848',
+    bg:'#05030f',
+  },
+  // C: Teal labels + blue neutrons
+  C: {
+    accent1:'#ff2d78', accent1dim:'rgba(255,45,120,0.22)', accent1glow:'rgba(255,45,120,0.5)',
+    accent2:'#00f5e0', accent2dim:'rgba(0,245,224,0.15)',  accent2glow:'rgba(0,245,224,0.4)',
+    uibg:'rgba(6,4,20,0.40)', uiborder:'rgba(255,45,120,0.12)',
+    textdim:'rgba(220,210,255,0.52)', textbright:'rgba(245,235,255,0.92)',
+    speck:'rgba(200,100,200,0.28)',
+    protonCore:'#ff80b0', protonMid:'#ff1a65', protonEdge:'#7a0030',
+    neutronCore:'#b0b0c4', neutronMid:'#70707f', neutronEdge:'#383848',
+    bg:'#04030e',
+  },
+};
+let currentTheme = THEMES.A;
+let currentThemeKey = 'A';   // serialised into sim state JSON
+
+// ============================================================
+//  PARTICLE ICON RENDERER — live animated, matches the sim exactly
+//  Uses PARTICLE_RADIUS * default zoom (2) for same apparent size.
+// ============================================================
+const iconJitter = {
+  proton:  { x: 0, y: 0 },
+  neutron: { x: 0, y: 0 },
+};
+
+function drawParticleIcon(canvas, type) {
+  const c = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  const R  = PARTICLE_RADIUS * 1.5; // sized to fit 40×40 icon canvas without clipping
+  const cx = w / 2, cy = h / 2;
+  const t  = currentTheme;
+  const isProton = type === 'proton';
+  const jit = iconJitter[type];
+  const px = cx + jit.x, py = cy + jit.y;
+
+  c.clearRect(0, 0, w, h);
+
+  // Flat base circle — solid mid color, soft edge fade (matches main draw)
+  const baseR    = R * 1.1;
+  const baseGrad = c.createRadialGradient(px, py, 0, px, py, baseR);
+  const mid = isProton ? t.protonMid : t.neutronMid;
+  baseGrad.addColorStop(0,    mid);
+  baseGrad.addColorStop(0.82, mid);
+  baseGrad.addColorStop(1,    'rgba(0,0,0,0)');
+  c.fillStyle = baseGrad;
+  c.beginPath(); c.arc(px, py, baseR, 0, Math.PI * 2); c.fill();
+
+  // Inner glow — bright centered bloom
+  const innerGlow = c.createRadialGradient(px, py, 0, px, py, R);
+  const core = isProton ? t.protonCore : t.neutronCore;
+  innerGlow.addColorStop(0,   core);
+  innerGlow.addColorStop(0.5, core);
+  innerGlow.addColorStop(1,   'rgba(0,0,0,0)');
+  c.globalAlpha = 0.82;
+  c.fillStyle = innerGlow;
+  c.beginPath(); c.arc(px, py, R, 0, Math.PI * 2); c.fill();
+  c.globalAlpha = 1;
+
+  // + drawn geometrically — mathematically centered, no font metric issues
+  if (isProton) {
+    const arm   = R * 0.36;
+    const thick = R * 0.225;
+    c.fillStyle = 'rgba(255,255,255,0.88)';
+    c.fillRect(px - arm,    py - thick / 2, arm * 2, thick); // horizontal
+    c.fillRect(px - thick / 2, py - arm,    thick, arm * 2); // vertical
+  }
+}
+
+// Icon animation loop — runs independently; picks up theme changes automatically
+function iconAnimLoop() {
+  for (const key of ['proton', 'neutron']) {
+    const j = iconJitter[key];
+    j.x += (Math.random() - 0.5) * 0.7;
+    j.y += (Math.random() - 0.5) * 0.7;
+    j.x *= 0.78;
+    j.y *= 0.78;
+  }
+  if (protonIconCanvas)  drawParticleIcon(protonIconCanvas,  'proton');
+  if (neutronIconCanvas) drawParticleIcon(neutronIconCanvas, 'neutron');
+  requestAnimationFrame(iconAnimLoop);
+}
+
+function applyTheme(key) {
+  const t = THEMES[key];
+  currentTheme = t;
+  currentThemeKey = key;
+  const r = document.documentElement.style;
+  r.setProperty('--accent1',      t.accent1);
+  r.setProperty('--accent1-dim',  t.accent1dim);
+  r.setProperty('--accent1-glow', t.accent1glow);
+  r.setProperty('--accent2',      t.accent2);
+  r.setProperty('--accent2-dim',  t.accent2dim);
+  r.setProperty('--accent2-glow', t.accent2glow);
+  r.setProperty('--ui-bg',        t.uibg);
+  r.setProperty('--ui-border',    t.uiborder);
+  r.setProperty('--text-dim',     t.textdim);
+  r.setProperty('--text-bright',  t.textbright);
+  r.setProperty('--speck-color',   t.speck);
+  r.setProperty('--neutron-core',  t.neutronCore);
+  r.setProperty('--neutron-mid',   t.neutronMid);
+  r.setProperty('--neutron-edge',  t.neutronEdge);
+  r.setProperty('--page-bg', t.bg);
+  document.body.style.background = t.bg;
+  document.body.classList.remove('screenshot-mode');
+  document.getElementById('themeLight').classList.remove('active');
+  document.querySelectorAll('.theme-btn:not(#themeLight)').forEach(b => b.classList.remove('active'));
+  document.getElementById('theme'+key).classList.add('active');
+  document.body.classList.toggle('theme-teal', key === 'C');
+  if (!running) draw();
+}
+document.getElementById('themeA').addEventListener('click', () => applyTheme('A'));
+document.getElementById('themeB').addEventListener('click', () => applyTheme('B'));
+document.getElementById('themeC').addEventListener('click', () => applyTheme('C'));
+document.getElementById('bgColorPicker').addEventListener('input', function() {
+  document.documentElement.style.setProperty('--bg-color', this.value);
+  if (!running) draw();
+});
+document.getElementById('themeLight').addEventListener('click', () => {
+  const on = document.body.classList.toggle('screenshot-mode');
+  document.getElementById('themeLight').classList.toggle('active', on);
+  if (!running) draw();
+});
+// Per-particle jitter offsets — must be declared before applyTheme('A') calls draw()
+let jitter = [];
+
+// Initialise CSS vars from Theme A (matches :root defaults, keeps everything in sync)
+applyTheme('A');
+
+// ============================================================
+//  BACKGROUND SPECKS  (drifting ambient particles)
+// ============================================================
+const NUM_SPECKS = 16;
+const specks = Array.from({ length: NUM_SPECKS }, () => {
+  const speed = 15 + Math.random() * 15;
+  const angle = Math.random() * Math.PI * 2;
+  return {
+    x:  Math.random() * window.innerWidth,
+    y:  Math.random() * window.innerHeight,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    len: 18 + Math.random() * 55,   // longer trail
+    w:   0.5 + Math.random() * 0.9,
+    a:   0.18 + Math.random() * 0.38,
+  };
+});
+
+function updateSpecks() {
+  const W = canvas.width, H = canvas.height;
+  for (const s of specks) {
+    s.x += s.vx; s.y += s.vy;
+    if (s.x < -60) s.x = W + 60;
+    else if (s.x > W + 60) s.x = -60;
+    if (s.y < -60) s.y = H + 60;
+    else if (s.y > H + 60) s.y = -60;
+  }
+}
+
+function drawSpecks() {
+  const speckColor = currentTheme.speck;
+  for (const s of specks) {
+    const base = speckColor.replace(/[\d.]+\)$/, `${s.a.toFixed(2)})`);
+    // Draw as motion-blur line: tail behind, bright head
+    const tx = s.x - s.vx / Math.hypot(s.vx, s.vy) * s.len;
+    const ty = s.y - s.vy / Math.hypot(s.vx, s.vy) * s.len;
+    const grad = ctx.createLinearGradient(tx, ty, s.x, s.y);
+    grad.addColorStop(0, speckColor.replace(/[\d.]+\)$/, '0)'));
+    grad.addColorStop(1, base);
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(s.x, s.y);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = s.w;
+    ctx.stroke();
+  }
+}
+
+// Per-particle jitter offsets (applied only when stopped)
+// (declaration moved above applyTheme call to avoid TDZ crash)
+function ensureJitter() {
+  while (jitter.length < particles.length) jitter.push({ x: 0, y: 0 });
+  if (jitter.length > particles.length) jitter.length = particles.length;
+}
+function updateJitter() {
+  // When live particles are gone but a historical frame is displayed, size jitter
+  // to the historical frame so replayed particles can still jitter.
+  const targetLen = (particles.length === 0 && scrubFrame >= 0 && _histLen > 0)
+    ? (_histGet(scrubFrame)?.n ?? 0)
+    : particles.length;
+  while (jitter.length < targetLen) jitter.push({ x: 0, y: 0 });
+  if (jitter.length > targetLen) jitter.length = targetLen;
+  for (let i = 0; i < jitter.length; i++) {
+    jitter[i].x += (Math.random() - 0.5) * 0.7;
+    jitter[i].y += (Math.random() - 0.5) * 0.7;
+    jitter[i].x *= 0.78;
+    jitter[i].y *= 0.78;
+  }
+}
+
+// ============================================================
+// ============================================================
+//  PARTICLE GRAIN TEXTURE
+//  Small offscreen canvas refreshed every frame; drawn with
+//  'overlay' blend clipped to each particle circle.
+// ============================================================
+const GRAIN_SIZE = 64;
+const grainBuf = document.createElement('canvas');
+grainBuf.width = grainBuf.height = GRAIN_SIZE;
+const grainBufCtx = grainBuf.getContext('2d');
+// Cached ImageData — allocated once; reused every frame to avoid ~16 KB/frame GC pressure.
+let _grainImgData = grainBufCtx.createImageData(GRAIN_SIZE, GRAIN_SIZE);
+
+function refreshParticleGrain() {
+  const d = _grainImgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = (Math.random() * 255) | 0;
+    d[i] = d[i+1] = d[i+2] = v;
+    d[i+3] = (Math.random() * 210) | 0;  // dense — up to 82% opaque
+  }
+  grainBufCtx.putImageData(_grainImgData, 0, 0);
+}
+
+function drawParticleGrain(cx, cy) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.globalAlpha = 0.45;
+  const s = GRAIN_SIZE;
+  ctx.drawImage(grainBuf, cx - s / 2, cy - s / 2, s, s);
+  ctx.restore();
+}
+
+// ============================================================
+//  CRT NOISE + SCANLINE OVERLAY
+// ============================================================
+let noiseCanvas = null, noiseCtx = null, noiseFrame = 0;
+
+function initNoise() {
+  noiseCanvas = document.createElement('canvas');
+  noiseCanvas.width  = 256;
+  noiseCanvas.height = 256;
+  noiseCtx = noiseCanvas.getContext('2d');
+}
+initNoise();
+
+// Two noise canvases — alternate each frame for denser churn
+let noiseCanvas2 = document.createElement('canvas');
+noiseCanvas2.width = noiseCanvas2.height = 256;
+const noiseCtx2 = noiseCanvas2.getContext('2d');
+
+function updateNoise() {
+  // Fill whichever buffer is "next" — both get updated every 2 frames each
+  const target = noiseFrame % 2 === 0 ? noiseCtx : noiseCtx2;
+  const id = target.createImageData(256, 256);
+  const d  = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    // denser: ~65% of pixels get a value, brighter range
+    if (Math.random() > 0.35) {
+      const v = Math.floor(Math.random() * 200 + 30);
+      d[i] = d[i+1] = d[i+2] = v;
+      d[i+3] = Math.floor(Math.random() * 80 + 15);
+    }
+  }
+  target.putImageData(id, 0, 0);
+}
+
+function drawCRT() {
+  const W = canvas.width, H = canvas.height;
+  const now = performance.now();
+
+  // Flicker: slow swell + occasional sharp dropout
+  const slowFlicker  = 0.80 + 0.20 * (0.5 + 0.5 * Math.sin(now * 0.0009 + Math.sin(now * 0.00021) * 4));
+  const twitch       = Math.random() > 0.978 ? 0.2 + Math.random() * 0.5 : 1.0;
+  const flickerMult  = slowFlicker * twitch;
+
+  ctx.save();
+
+  // Layer 1: base noise tile (screen blend — brightens without washing out)
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.13 * flickerMult;
+  const src = noiseFrame % 2 === 0 ? noiseCanvas : noiseCanvas2;
+  for (let x = 0; x < W; x += 256) {
+    for (let y = 0; y < H; y += 256) ctx.drawImage(src, x, y);
+  }
+
+  // Layer 2: second noise pass at slight offset for texture depth
+  ctx.globalAlpha = 0.07 * flickerMult;
+  const src2 = noiseFrame % 2 === 0 ? noiseCanvas2 : noiseCanvas;
+  for (let x = 0; x < W; x += 256) {
+    for (let y = 0; y < H; y += 256) ctx.drawImage(src2, x + 32, y + 32);
+  }
+
+  // Layer 3: scanlines
+  ctx.globalAlpha = 0.055 * flickerMult;
+  ctx.fillStyle = '#000';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+
+  ctx.restore();
+}
+
+// ============================================================
+//  AMBIENT LOOP  (always-on: specks + jitter, even when stopped)
+// ============================================================
+let ambientId = null;
+let _ambientDrawSkip = 0;
+function ambientLoop() {
+  noiseFrame++;
+  refreshParticleGrain();
+  updateJitter(); // always update every RAF so jitter state stays smooth
+  if (!running) {
+    // Throttle idle redraws to ~15 fps (every 4th RAF) — full canvas repaint
+    // (incl. heatmaps) is expensive; jitter is imperceptible above ~12 fps.
+    _ambientDrawSkip = (_ambientDrawSkip + 1) % 4;
+    if (_ambientDrawSkip === 0) {
+      if (scrubFrame >= 0) {
+        renderFrame(scrubFrame);
+      } else {
+        draw();
+      }
+    }
+  }
+  ambientId = requestAnimationFrame(ambientLoop);
+}
+ambientLoop();
+iconAnimLoop();
+
+// ── Hash-driven tab routing (applyHash is the ONLY source of truth) ──
+// Re-establishes a known baseline UI before applying the per-hash branch
+// so back/forward through hashes never accumulates stale mutations.
+// Bound to both init and `hashchange` so URL navigation always updates the
+// UI (issue #37).
+function applyHash() {
+  const tabA = document.getElementById('tabA');
+  // Baseline: both tabs visible and clickable, default Tab A label.
+  document.getElementById('tabB').style.display = '';
+  tabA.textContent = 'Protons';
+  tabA.style.pointerEvents = '';
+
+  if (location.hash === '#nucleus') {
+    applyTab(false);
+    neutronSlider.value = 2;
+    placeNucleus(2, 2);
+    updateCam();
+  } else if (location.hash === '#protons') {
+    document.getElementById('tabB').style.display = 'none';
+    tabA.textContent = 'PROTONS';
+    tabA.style.pointerEvents = 'none';
+    applyTab(true);
+  } else {
+    applyTab(true);
+  }
+}
+applyHash();
+window.addEventListener('hashchange', applyHash);
+
+// Apply force mode AFTER tab is set so currentTabIsProton is correct.
+// setForceModeActive calls draw() itself when !running, so no extra draw() needed here.
+setForceModeActive(arrowMode);
+
+// ── Dev recording menu (right-click replay button) ───────────────────────────
+(function() {
+  const menu = document.createElement('div');
+  menu.style.cssText = 'position:fixed;display:none;z-index:9999;background:#1a1a2e;border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:4px 0;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,0.6);font-family:Lexend,sans-serif;font-size:13px;';
+  document.body.appendChild(menu);
+
+  function menuItem(label) {
+    const el = document.createElement('div');
+    el.textContent = label;
+    el.style.cssText = 'padding:8px 16px;cursor:pointer;color:rgba(255,255,255,0.85);white-space:nowrap;';
+    el.addEventListener('mouseenter', () => el.style.background = 'rgba(255,255,255,0.08)');
+    el.addEventListener('mouseleave', () => el.style.background = '');
+    menu.appendChild(el);
+    return el;
+  }
+
+  const recItem = menuItem('⏺  Export Replay');
+
+  recItem.addEventListener('click', () => {
+    menu.style.display = 'none';
+    if (!_histLen) return;
+    const chunks = [];
+    const stream = canvas.captureStream(30);
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      const url = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+      const a = document.createElement('a'); a.href = url; a.download = 'replay.webm'; a.click();
+      URL.revokeObjectURL(url);
+    };
+    recorder.start();
+    doReplay();
+    let started = false;
+    requestAnimationFrame(function poll() {
+      if (!started && replaying) { started = true; }
+      if (started && !replaying) { setTimeout(() => recorder.stop(), 200); return; }
+      requestAnimationFrame(poll);
+    });
+  });
+
+  document.getElementById('replayBtn').addEventListener('contextmenu', e => {
+    e.preventDefault();
+    menu.style.display = 'block';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top  = e.clientY + 'px';
+  });
+  document.addEventListener('click', () => menu.style.display = 'none');
+})();
+
+// ── Quality selector ─────────────────────────────────────────────────────────
+function _applyQuality(level) {
+  _quality = level;
+  const el = document.getElementById('qualitySelect');
+  if (el) el.value = level;
+}
+
+function _runPerfBenchmark() {
+  const oc = document.createElement('canvas');
+  oc.width = 300; oc.height = 300;
+  const dc = oc.getContext('2d');
+  const R = PARTICLE_RADIUS;
+  for (let i = 0; i < 15; i++) {
+    const x = 15 + (i % 5) * 40, y = 15 + Math.floor(i / 5) * 40;
+    const g = dc.createRadialGradient(x, y, 0, x, y, R);
+    g.addColorStop(0, '#ff1a65'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    dc.fillStyle = g; dc.beginPath(); dc.arc(x, y, R, 0, Math.PI * 2); dc.fill();
+  }
+  const t0 = performance.now();
+  for (let i = 0; i < 100; i++) {
+    const x = 15 + (i % 10) * 27, y = 15 + Math.floor(i / 10) * 27;
+    const g1 = dc.createRadialGradient(x, y, 0, x, y, R * 1.1);
+    g1.addColorStop(0, '#ff1a65'); g1.addColorStop(0.82, '#ff1a65'); g1.addColorStop(1, 'rgba(0,0,0,0)');
+    dc.fillStyle = g1; dc.beginPath(); dc.arc(x, y, R * 1.1, 0, Math.PI * 2); dc.fill();
+    const g2 = dc.createRadialGradient(x, y, 0, x, y, R);
+    g2.addColorStop(0, '#ff80b0'); g2.addColorStop(0.5, '#ff80b0'); g2.addColorStop(1, 'rgba(0,0,0,0)');
+    dc.save(); dc.shadowColor = '#ff80b0'; dc.shadowBlur = 8; dc.globalAlpha = 0.82;
+    dc.fillStyle = g2; dc.beginPath(); dc.arc(x, y, R, 0, Math.PI * 2); dc.fill();
+    dc.restore(); dc.globalAlpha = 1;
+  }
+  dc.getImageData(0, 0, 1, 1);
+  return performance.now() - t0;
+}
+
+(function _startupBenchmark() {
+  const ms = _runPerfBenchmark();
+  if (ms > 6) {
+    const hiOpt = document.querySelector('#qualitySelect option[value="hi-res"]');
+    if (hiOpt) hiOpt.remove();
+    _applyQuality('simple');
+  } else if (ms > 3) {
+    _applyQuality('detailed');
+  }
+}());
+
+document.getElementById('qualitySelect').addEventListener('change', function() {
+  _applyQuality(this.value);
+});
+
+// ── Bug report button ─────────────────────────────────────────────────────
+function getBugState() {
+  return {
+    sim:              'v11',
+    tab:              currentTab,
+    strongForce:      strongForceStrength,
+    strongRange:      strongForceRange,
+    zoom:             +zoom.toFixed(3),
+    camX:             Math.round(camX),
+    camY:             Math.round(camY),
+    running,
+    arrowMode:        typeof arrowMode !== 'undefined' ? arrowMode : null,
+    showElecField:    document.getElementById('electricFieldToggle')?.checked,
+    showStrongField:  document.getElementById('strongFieldToggle')?.checked,
+    particleCount:    particles.length,
+    particles: particles.map(p => ({
+      t: p.type, x: Math.round(p.x), y: Math.round(p.y),
+      vx: +p.vx.toFixed(3), vy: +p.vy.toFixed(3),
+    })),
+    actionLog: actionLog.slice(),
+  };
+}
+document.getElementById('bugReportBtn').addEventListener('click', e => {
+  e.preventDefault();
+  const state = encodeURIComponent(JSON.stringify(getBugState()));
+  const url   = `../dev/bug-report.html?sim=v11&sourceUrl=${encodeURIComponent(location.href)}&state=${state}`;
+  document.getElementById('bugModalFrame').src = url;
+  document.getElementById('bugModal').style.display = 'flex';
+});
+function closeBugModal() {
+  document.getElementById('bugModal').style.display = 'none';
+  document.getElementById('bugModalFrame').src = 'about:blank';
+}
+document.getElementById('bugModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('bugModal')) closeBugModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('bugModal').style.display === 'flex') closeBugModal();
+});
+</script>
+
+<!-- Hub / table-of-contents overlay (#all) -->
+<div id="allModal" style="display:none;position:fixed;inset:0;z-index:20000;background:#000;">
+  <img id="allBg" src="images/TitleFull.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block;">
+  <div id="allTitleContainer" style="position:absolute;inset:80px;">
+    <img id="allTitle" src="images/TitleText.jpg" alt="Nuclear Interactions" style="width:100%;height:100%;object-fit:contain;display:block;">
+    <div id="allHotspots" style="position:absolute;pointer-events:none;">
+      <a href="https://ghostoutfit.github.io/stability/"         style="position:absolute;pointer-events:all;cursor:pointer;top:34.3%;left:17.9%;width:66.9%;height:8.5%"></a>
+      <a href="https://ghostoutfit.github.io/stability/#nucleus" style="position:absolute;pointer-events:all;cursor:pointer;top:44.4%;left:17.9%;width:66.9%;height:8.4%"></a>
+      <a href="https://ghostoutfit.github.io/fission/"           style="position:absolute;pointer-events:all;cursor:pointer;top:54.4%;left:17.9%;width:66.9%;height:8.6%"></a>
+      <a href="https://ghostoutfit.github.io/chain-reaction/"    style="position:absolute;pointer-events:all;cursor:pointer;top:64.6%;left:17.9%;width:66.9%;height:8.7%"></a>
+      <a href="https://ghostoutfit.github.io/fusion/#fusion"     style="position:absolute;pointer-events:all;cursor:pointer;top:74.5%;left:17.9%;width:66.9%;height:8.4%"></a>
+      <a href="https://ghostoutfit.github.io/fusion/"            style="position:absolute;pointer-events:all;cursor:pointer;top:84.5%;left:17.9%;width:66.9%;height:8.5%"></a>
+    </div>
+  </div>
+  <button onclick="history.back()" style="position:fixed;top:14px;right:18px;z-index:20001;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);border-radius:8px;width:36px;height:36px;font-size:20px;cursor:pointer;line-height:1;padding:0;" onmouseenter="this.style.background='rgba(255,255,255,0.15)'" onmouseleave="this.style.background='rgba(0,0,0,0.55)'">✕</button>
+</div>
+
+<script>
+(function() {
   const IMG_W = 1150, IMG_H = 820;
-
-  function positionHotspots() {
-    const container = document.getElementById('title-container');
-    const hotspots  = document.getElementById('hotspots');
-    const cw = container.clientWidth;
-    const ch = container.clientHeight;
-
+  function positionAllHotspots() {
+    const container = document.getElementById('allTitleContainer');
+    const hotspots  = document.getElementById('allHotspots');
+    if (!container || !hotspots) return;
+    const cw = container.clientWidth, ch = container.clientHeight;
     const scale = Math.min(cw / IMG_W, ch / IMG_H);
-    const dw = IMG_W * scale;
-    const dh = IMG_H * scale;
-    const dx = (cw - dw) / 2;
-    const dy = (ch - dh) / 2;
-
+    const dw = IMG_W * scale, dh = IMG_H * scale;
+    const dx = (cw - dw) / 2, dy = (ch - dh) / 2;
     hotspots.style.left   = dx + 'px';
     hotspots.style.top    = dy + 'px';
     hotspots.style.width  = dw + 'px';
     hotspots.style.height = dh + 'px';
   }
+  document.getElementById('allTitle').addEventListener('load', positionAllHotspots);
+  window.addEventListener('resize', positionAllHotspots);
+  positionAllHotspots();
 
-  document.getElementById('title').addEventListener('load', positionHotspots);
-  window.addEventListener('resize', positionHotspots);
-  positionHotspots();
+  function applyAllHash() {
+    const show = location.hash === '#all';
+    document.getElementById('allModal').style.display = show ? 'block' : 'none';
+    if (show) positionAllHotspots();
+  }
+  window.addEventListener('hashchange', applyAllHash);
+  applyAllHash();
+})();
 </script>
 
+<!-- Bug report modal -->
+<div id="bugModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(2,1,12,0.85);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+  <div style="position:relative;width:660px;max-width:94vw;height:88vh;background:#05040f;border:1px solid rgba(26,110,255,0.35);border-radius:14px;box-shadow:0 0 0 1px rgba(26,110,255,0.1),0 8px 60px rgba(0,0,0,0.8),0 0 40px rgba(26,110,255,0.12);display:flex;flex-direction:column;overflow:hidden;">
+    <button onclick="closeBugModal()" style="position:absolute;top:10px;right:12px;z-index:1;background:rgba(26,110,255,0.12);border:1px solid rgba(26,110,255,0.3);color:#8090c0;border-radius:6px;width:28px;height:28px;font-size:16px;cursor:pointer;line-height:1;padding:0;" onmouseenter="this.style.background='rgba(26,110,255,0.28)'" onmouseleave="this.style.background='rgba(26,110,255,0.12)'">✕</button>
+    <iframe id="bugModalFrame" src="about:blank" style="flex:1;border:none;border-radius:14px;background:#05040f;"></iframe>
+  </div>
+</div>
 </body>
 </html>
