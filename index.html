@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nuclear Interactions</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+  }
+
+  #bg {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    display: block;
+  }
+
+  #title-container {
+    position: fixed;
+    inset: 80px;
+  }
+
+  #title {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  /* Overlay that JS sizes to match the actual displayed image rect */
+  #hotspots {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  #hotspots a {
+    position: absolute;
+    pointer-events: all;
+    cursor: pointer;
+    /* Uncomment to debug hit zones: */
+    /* background: rgba(255,0,0,0.25); */
+  }
+</style>
+</head>
+<body>
+
+<img id="bg" src="images/TitleFull.png" alt="">
+
+<div id="title-container">
+  <img id="title" src="images/TitleText.jpg" alt="Nuclear Interactions">
+  <div id="hotspots">
+    <a href="https://ghostoutfit.github.io/stability/"          style="top:34.3%;left:17.9%;width:66.9%;height:8.5%"></a>
+    <a href="https://ghostoutfit.github.io/stability/#nucleus"  style="top:44.4%;left:17.9%;width:66.9%;height:8.4%"></a>
+    <a href="https://ghostoutfit.github.io/fission/"            style="top:54.4%;left:17.9%;width:66.9%;height:8.6%"></a>
+    <a href="https://ghostoutfit.github.io/chain-reaction/"     style="top:64.6%;left:17.9%;width:66.9%;height:8.7%"></a>
+    <a href="https://ghostoutfit.github.io/fusion/#fusion"      style="top:74.5%;left:17.9%;width:66.9%;height:8.4%"></a>
+    <a href="https://ghostoutfit.github.io/fusion/"             style="top:84.5%;left:17.9%;width:66.9%;height:8.5%"></a>
+  </div>
+</div>
+
+<script>
+  const IMG_W = 1150, IMG_H = 820;
+
+  function positionHotspots() {
+    const container = document.getElementById('title-container');
+    const hotspots  = document.getElementById('hotspots');
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+
+    const scale = Math.min(cw / IMG_W, ch / IMG_H);
+    const dw = IMG_W * scale;
+    const dh = IMG_H * scale;
+    const dx = (cw - dw) / 2;
+    const dy = (ch - dh) / 2;
+
+    hotspots.style.left   = dx + 'px';
+    hotspots.style.top    = dy + 'px';
+    hotspots.style.width  = dw + 'px';
+    hotspots.style.height = dh + 'px';
+  }
+
+  document.getElementById('title').addEventListener('load', positionHotspots);
+  window.addEventListener('resize', positionHotspots);
+  positionHotspots();
+</script>
+
+</body>
+</html>
