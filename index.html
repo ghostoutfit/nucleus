@@ -1127,6 +1127,7 @@ let animId = null;
 let _lagEma = 0, _lagDetected = false, _lagSkip = 0;
 let speed = 1.5;  // Internal dt per frame (display speed = speed * 2)
 let recordedSpeed = 1.5;  // speed at which the current recording was made; used to normalise replay rate
+let replayLocked = false; // true once user enters replay/scrub mode; Go no longer re-engages live recording
 
 // ---- Time scrubber ----
 const MAX_HISTORY = 4000;
@@ -1750,6 +1751,7 @@ function resetSim() {
   scrubReplayBtn.disabled = true;
   _histReset();
   _cachedBiggestCluster = null;
+  replayLocked = false;
   scrubFrame = -1;
   timeSlider.value = 0;
   timeSlider.max = 0;
@@ -1820,21 +1822,30 @@ function restoreSnapshot() {
 //  GO / STOP BUTTON
 // ============================================================
 goBtn.addEventListener('click', () => {
-  replaying = false;
   running = !running;
   logAction(running ? 'Pressed Go (' + currentTab + ')' : 'Paused (' + currentTab + ')');
   goBtn.textContent = running ? '❙ ❙' : '▶ GO';
   goBtn.classList.toggle('running', running);
   if (running) {
-    if (_histLen === 0) {
-      // Fresh start (after reset) — initialise history and snapshot
-      recordedSpeed = speed;
-      takeSnapshot();
+    if (replayLocked) {
+      // Locked to replay — play/pause through recorded frames only, no new recording
+      replaying = true;
+      replayAccum = 0;
+      if (scrubFrame >= _histLen - 1) scrubFrame = 0; // wrap to start if at end
+      animId = requestAnimationFrame(loop);
+    } else {
+      replaying = false;
+      if (_histLen === 0) {
+        // Fresh start (after reset) — initialise history and snapshot
+        recordedSpeed = speed;
+        takeSnapshot();
+      }
+      scrubFrame = -1;       // exit any scrub/replay mode, go live
+      timeSlider.disabled = true;
+      loop();
     }
-    scrubFrame = -1;       // exit any scrub/replay mode, go live
-    timeSlider.disabled = true;
-    loop();
   } else {
+    replaying = false;
     cancelAnimationFrame(animId);
   }
 });
@@ -1854,6 +1865,7 @@ function doReplay() {
   timeSlider.value = 0;
   renderFrame(0);
   // Auto-play through recorded history
+  replayLocked = true;
   replayAccum = 0;
   replaying = true;
   running = true;
@@ -3570,6 +3582,7 @@ timeSlider.addEventListener('input', () => {
     goBtn.textContent = '▶ GO';
     goBtn.classList.remove('running');
   }
+  replayLocked = true;
   const val = parseInt(timeSlider.value);
   scrubFrame = val;
   updateFrameCounter(val + 1, _histLen);
@@ -4069,7 +4082,7 @@ function applyHash() {
   tabA.textContent = 'Protons';
   tabA.style.pointerEvents = '';
 
-  if (location.hash === '#nucleus') {
+  if (location.hash === '#nucleus' || location.hash === '#stability') {
     applyTab(false);
     neutronSlider.value = 2;
     placeNucleus(2, 2);
