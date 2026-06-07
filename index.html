@@ -2098,7 +2098,7 @@ function setForceModeActive(mode) {
   // On Tab A, auto-select rightmost proton when turning forces on
   if (currentTabIsProton && mode > 0) selectRightmostProton();
   // On Tab B, auto-select the first proton when forces turn on with nothing selected
-  if (!currentTabIsProton && mode > 0 && selectedParticle < 0 && particles.length > 0) {
+  if (!currentTabIsProton && mode > 0 && (selectedParticle == null || selectedParticle < 0) && particles.length > 0) {
     for (let i = 0; i < particles.length; i++) {
       if (particles[i].type === 'proton') { selectedParticle = i; break; }
     }
@@ -4052,7 +4052,6 @@ let ambientId = null;
 let _ambientDrawSkip = 0;
 function ambientLoop() {
   noiseFrame++;
-  refreshParticleGrain();
   updateJitter(); // always update every RAF so jitter state stays smooth
   if (!running) {
     // Throttle idle redraws to ~15 fps (every 4th RAF) — full canvas repaint
