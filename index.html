@@ -4229,6 +4229,53 @@ document.addEventListener('keydown', e => {
 });
 </script>
 
+<!-- Hub / table-of-contents overlay (#all) -->
+<div id="allModal" style="display:none;position:fixed;inset:0;z-index:20000;background:#000;">
+  <img id="allBg" src="images/TitleFull.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:fill;display:block;">
+  <div id="allTitleContainer" style="position:absolute;inset:80px;">
+    <img id="allTitle" src="images/TitleText.jpg" alt="Nuclear Interactions" style="width:100%;height:100%;object-fit:contain;display:block;">
+    <div id="allHotspots" style="position:absolute;pointer-events:none;">
+      <a href="https://ghostoutfit.github.io/stability/"         style="position:absolute;pointer-events:all;cursor:pointer;top:34.3%;left:17.9%;width:66.9%;height:8.5%"></a>
+      <a href="https://ghostoutfit.github.io/stability/#nucleus" style="position:absolute;pointer-events:all;cursor:pointer;top:44.4%;left:17.9%;width:66.9%;height:8.4%"></a>
+      <a href="https://ghostoutfit.github.io/fission/"           style="position:absolute;pointer-events:all;cursor:pointer;top:54.4%;left:17.9%;width:66.9%;height:8.6%"></a>
+      <a href="https://ghostoutfit.github.io/chain-reaction/"    style="position:absolute;pointer-events:all;cursor:pointer;top:64.6%;left:17.9%;width:66.9%;height:8.7%"></a>
+      <a href="https://ghostoutfit.github.io/fusion/#fusion"     style="position:absolute;pointer-events:all;cursor:pointer;top:74.5%;left:17.9%;width:66.9%;height:8.4%"></a>
+      <a href="https://ghostoutfit.github.io/fusion/"            style="position:absolute;pointer-events:all;cursor:pointer;top:84.5%;left:17.9%;width:66.9%;height:8.5%"></a>
+    </div>
+  </div>
+  <button onclick="history.back()" style="position:fixed;top:14px;right:18px;z-index:20001;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);border-radius:8px;width:36px;height:36px;font-size:20px;cursor:pointer;line-height:1;padding:0;" onmouseenter="this.style.background='rgba(255,255,255,0.15)'" onmouseleave="this.style.background='rgba(0,0,0,0.55)'">✕</button>
+</div>
+
+<script>
+(function() {
+  const IMG_W = 1150, IMG_H = 820;
+  function positionAllHotspots() {
+    const container = document.getElementById('allTitleContainer');
+    const hotspots  = document.getElementById('allHotspots');
+    if (!container || !hotspots) return;
+    const cw = container.clientWidth, ch = container.clientHeight;
+    const scale = Math.min(cw / IMG_W, ch / IMG_H);
+    const dw = IMG_W * scale, dh = IMG_H * scale;
+    const dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+    hotspots.style.left   = dx + 'px';
+    hotspots.style.top    = dy + 'px';
+    hotspots.style.width  = dw + 'px';
+    hotspots.style.height = dh + 'px';
+  }
+  document.getElementById('allTitle').addEventListener('load', positionAllHotspots);
+  window.addEventListener('resize', positionAllHotspots);
+  positionAllHotspots();
+
+  function applyAllHash() {
+    const show = location.hash === '#all';
+    document.getElementById('allModal').style.display = show ? 'block' : 'none';
+    if (show) positionAllHotspots();
+  }
+  window.addEventListener('hashchange', applyAllHash);
+  applyAllHash();
+})();
+</script>
+
 <!-- Bug report modal -->
 <div id="bugModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(2,1,12,0.85);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
   <div style="position:relative;width:660px;max-width:94vw;height:88vh;background:#05040f;border:1px solid rgba(26,110,255,0.35);border-radius:14px;box-shadow:0 0 0 1px rgba(26,110,255,0.1),0 8px 60px rgba(0,0,0,0.8),0 0 40px rgba(26,110,255,0.12);display:flex;flex-direction:column;overflow:hidden;">
