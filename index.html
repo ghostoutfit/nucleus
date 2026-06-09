@@ -3639,6 +3639,16 @@ function loop() {
     return;
   }
 
+  // Auto-stop when history is full so the beginning is never overwritten.
+  // Check here, before any physics runs, so pressing Go on a full buffer
+  // is a no-op rather than silently eroding the oldest frame each time.
+  if (_histLen >= MAX_HISTORY) {
+    running = false;
+    goBtn.textContent = '▶ GO';
+    goBtn.classList.remove('running');
+    return;
+  }
+
   // ── Live physics ──
   loopFrame++;
   applyBiggestClusterStability();
@@ -3704,14 +3714,6 @@ function loop() {
 
   // Auto-stop when all particles have escaped off-screen
   if (particles.length === 0) {
-    running = false;
-    goBtn.textContent = '▶ GO';
-    goBtn.classList.remove('running');
-    return;
-  }
-
-  // Auto-stop when history is full so the beginning is never overwritten
-  if (_histLen >= MAX_HISTORY) {
     running = false;
     goBtn.textContent = '▶ GO';
     goBtn.classList.remove('running');
