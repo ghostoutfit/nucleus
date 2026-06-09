@@ -3555,9 +3555,11 @@ function draw() {
 function renderFrame(idx) {
   const frame = _histGet(idx);
   if (!frame) return;
-  const savedParticles = particles;
-  const savedDragging  = dragging;
-  const savedFlashes   = quantumFlashes;
+  const savedParticles       = particles;
+  const savedDragging        = dragging;
+  const savedFlashes         = quantumFlashes;
+  const savedSelectedParticle = selectedParticle;
+  const savedSelectedGroup   = selectedGroup.slice();
   particles = _restoreParticles(frame);
   dragging  = null;
   quantumFlashes = [];
@@ -3568,9 +3570,11 @@ function renderFrame(idx) {
   draw();
   _cachedBiggestCluster = null; // particles changed; cache is stale
   updateStats();
-  particles      = savedParticles;
-  dragging       = savedDragging;
-  quantumFlashes = savedFlashes;
+  particles        = savedParticles;
+  dragging         = savedDragging;
+  quantumFlashes   = savedFlashes;
+  selectedParticle = savedSelectedParticle;
+  selectedGroup    = savedSelectedGroup;
   _cachedBiggestCluster = null; // restored to live particles; invalidate again
 }
 
