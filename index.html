@@ -3646,6 +3646,7 @@ function loop() {
     running = false;
     goBtn.textContent = '▶ GO';
     goBtn.classList.remove('running');
+    if (timeSlider.disabled) timeSlider.disabled = false;
     return;
   }
 
