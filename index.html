@@ -1561,8 +1561,10 @@ canvas.addEventListener('mousedown', (e) => {
     dragging = idx;
     dragOffsetX = particles[idx].x - pos.x;
     dragOffsetY = particles[idx].y - pos.y;
-    particles[idx].vx = 0;
-    particles[idx].vy = 0;
+    // Only kill velocity immediately when the sim is running — grabbing a
+    // moving particle should stop it. When paused, a click is just selection;
+    // velocity is zeroed by mousemove only if the user actually drags.
+    if (running) { particles[idx].vx = 0; particles[idx].vy = 0; }
     canvas.style.cursor = 'grabbing';
     if (!groupSelectMode) { selectedParticle = idx; }
     if (!running) draw();
