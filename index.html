@@ -946,36 +946,47 @@
   }
 
   @media (max-width: 600px) {
-    #toolbar {
-      padding: 5px 8px 5px;
-      gap: 3px;
-    }
-    #toolbar h1 {
-      font-size: 13px;
-    }
-    .toolbar-row {
-      gap: 6px;
-    }
+    /* ── Toolbar shell ── */
+    #toolbar { padding: 4px 8px 4px; gap: 3px; }
+    #toolbar h1 { font-size: 13px; }
+
+    /* ── Row 1: tabs + theme strip ── */
+    .tab-btn { padding: 3px 8px; font-size: 10px; letter-spacing: 0.5px; }
+    .theme-btn { width: 18px !important; height: 18px !important; }
+
+    /* ── Row 2: Go col + Pink box on line 1; Blue box wraps to line 2 ── */
+    .toolbar-row { gap: 4px; }
+
+    /* Go / Replay / Reset buttons — tighter */
+    .toolbar-row > div:first-child { gap: 4px; padding-bottom: 6px; }
+    .toolbar-row > div:first-child .btn { padding: 3px 10px; font-size: 10px; }
+
+    /* Pink box — compress to fit beside Go col on ~390px screen */
+    .ctrl-box-pink { gap: 6px; padding: 5px 7px; }
+    /* Stats col: override the inline min-width:120px */
+    .ctrl-box-pink > div:first-of-type { min-width: 72px !important; gap: 3px !important; }
+    #statProtons, #statNeutrons { font-size: 10px; }
+    /* Particle icon canvases — shrink */
+    #protonIconCanvas, #neutronIconCanvas { width: 26px !important; height: 26px !important; }
+    /* Particle add buttons */
+    #particleBtns, #particleBtnsNucleus { gap: 3px !important; }
     #particleBtns .particle-add-btn,
-    #elementBtns .particle-add-btn {
-      width: 30px;
-      height: 38px;
-      font-size: 12px;
-    }
-    .element-btn .el-num { font-size: 8px; }
-    .element-btn .el-sym { font-size: 11px; }
-    #scrubBar {
-      height: 58px;
-      padding: 0 70px 0 8px;
-      gap: 6px;
-    }
+    #particleBtnsNucleus .particle-add-btn { width: 24px; height: 36px; font-size: 11px; }
+    .element-btn .el-num { font-size: 7px; }
+    .element-btn .el-sym { font-size: 10px; }
+    /* Neutron +/- buttons */
+    #neutronDecBtn, #neutronIncBtn { width: 20px !important; height: 20px !important; font-size: 10px !important; }
+
+    /* Blue box — full-width on wrapped line 2, compact internals */
+    .ctrl-box-blue { gap: 10px; padding: 5px 10px; flex-wrap: wrap; }
+    .ctrl-box-blue input[type="range"] { width: 90px; }
+    .ctrl-box-blue .slider-icon { font-size: 20px; }
+    .ctrl-box-blue .toggle-label { font-size: 11px; gap: 4px; }
+    #showHideForces { min-width: 100px !important; font-size: 10px; padding: 3px 8px; }
+
+    /* Scrub bar */
+    #scrubBar { height: 56px; padding: 0 60px 0 8px; gap: 6px; }
     #scrubBar .scrub-label { display: none; }
-    .ctrl-box-pink, .ctrl-box-blue {
-      padding: 6px 8px 8px;
-    }
-    #statProtons, #statNeutrons {
-      font-size: 11px;
-    }
   }
 </style>
 </head>
