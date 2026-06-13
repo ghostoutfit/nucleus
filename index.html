@@ -40,7 +40,7 @@
     font-family: 'Lexend', sans-serif;
     overflow: hidden;
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
   }
   button, input, select, textarea {
     font-family: 'Lexend', sans-serif;
@@ -934,6 +934,49 @@
     font-size: 12px;
     width: 46px;
   }
+
+  /* ========================================
+     MOBILE / TOUCH
+     ======================================== */
+  #canvas {
+    touch-action: none; /* prevent scroll/zoom from swallowing canvas touches */
+  }
+  button, input[type="range"], select {
+    touch-action: manipulation; /* suppress 300ms tap delay */
+  }
+
+  @media (max-width: 600px) {
+    #toolbar {
+      padding: 5px 8px 5px;
+      gap: 3px;
+    }
+    #toolbar h1 {
+      font-size: 13px;
+    }
+    .toolbar-row {
+      gap: 6px;
+    }
+    #particleBtns .particle-add-btn,
+    #elementBtns .particle-add-btn {
+      width: 30px;
+      height: 38px;
+      font-size: 12px;
+    }
+    .element-btn .el-num { font-size: 8px; }
+    .element-btn .el-sym { font-size: 11px; }
+    #scrubBar {
+      height: 58px;
+      padding: 0 70px 0 8px;
+      gap: 6px;
+    }
+    #scrubBar .scrub-label { display: none; }
+    .ctrl-box-pink, .ctrl-box-blue {
+      padding: 6px 8px 8px;
+    }
+    #statProtons, #statNeutrons {
+      font-size: 11px;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1472,13 +1515,16 @@ let dragOffsetY = 0;
 // ============================================================
 function resize() {
   const scrubH = document.getElementById('scrubBar').offsetHeight;
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight - scrubH;
+  const vw = window.visualViewport ? window.visualViewport.width  : window.innerWidth;
+  const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  canvas.width  = vw;
+  canvas.height = vh - scrubH;
   _forcePanelWidth = forcePanelEl.offsetWidth;
   updateCam();
   if (!running) draw();
 }
 window.addEventListener('resize', resize);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
 setTimeout(resize, 0);
 
 // ============================================================
@@ -1557,7 +1603,7 @@ function separateOverlaps() {
 //  didDrag flag prevents click from firing after a drag release
 // ============================================================
 let didDrag = false;
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('pointerdown', (e) => {
   const pos = getCanvasPos(e);
   didDrag = false;
   const idx = findParticleAt(pos.x, pos.y);
@@ -1583,7 +1629,7 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 let _lastCursorCheck = 0;
-window.addEventListener('mousemove', (e) => {
+window.addEventListener('pointermove', (e) => {
   const pos = getCanvasPos(e);
   if (dragging !== null) {
     // Dragging a particle — works in both modes; always process drag events
@@ -1619,7 +1665,7 @@ window.addEventListener('mousemove', (e) => {
   canvas.style.cursor = hover >= 0 ? 'grab' : 'default';
 });
 
-window.addEventListener('mouseup', (e) => {
+window.addEventListener('pointerup', (e) => {
   if (dragging !== null) {
     separateOverlaps();
     if (!running) { computeEnergy(); draw(); }
@@ -2862,7 +2908,7 @@ let _fpAutoScaleSel = null;
 // ---- Force panel resize ----
 let _fpResize = null;
 document.querySelectorAll('.fp-rh').forEach(h => {
-  h.addEventListener('mousedown', e => {
+  h.addEventListener('pointerdown', e => {
     e.stopPropagation();
     const rect = forcePanelEl.getBoundingClientRect();
     forcePanelEl.style.width  = rect.width  + 'px';
@@ -2872,7 +2918,7 @@ document.querySelectorAll('.fp-rh').forEach(h => {
   });
 });
 
-window.addEventListener('mousemove', e => {
+window.addEventListener('pointermove', e => {
   if (!_fpResize) return;
   const { dir, sx, sy, ow, oh } = _fpResize;
   const dx = e.clientX - sx, dy = e.clientY - sy;
@@ -2895,7 +2941,7 @@ window.addEventListener('mousemove', e => {
   }
 });
 
-window.addEventListener('mouseup', () => { _fpResize = null; });
+window.addEventListener('pointerup', () => { _fpResize = null; });
 
 document.getElementById('fpZoomSlider').addEventListener('input', function() {
   fpZoom = parseFloat(this.value);
