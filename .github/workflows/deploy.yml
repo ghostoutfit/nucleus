@@ -34,6 +34,9 @@ jobs:
           path: site/test
         continue-on-error: true
 
+      - name: Remove nested .git from test dir
+        run: rm -rf site/test/.git
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
