@@ -678,16 +678,9 @@
     border-color: var(--accent2);
     box-shadow: 0 0 10px var(--accent2-glow);
     text-shadow: none;
-    padding: 18px 11px;
+    padding: 28px 11px;
     width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
   }
-  .shf-icon { display: none; }
-  .force-mode-btn.show-forces-large .shf-icon { display: block; }
   /* Teal theme: use highlighted active look instead of solid fill */
   body.theme-teal .force-mode-btn.show-forces-large {
     background: var(--accent2-dim);
@@ -695,7 +688,6 @@
     box-shadow: 0 0 6px var(--accent2-glow);
     text-shadow: 0 0 8px var(--accent2-glow);
   }
-  /* Light mode: icon inherits color:#000 so dots/line are black automatically */
 
   /* ========================================
      FORCE PANEL — right-side overlay
@@ -1103,14 +1095,7 @@
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;justify-content:flex-start;align-self:stretch">
-        <button id="showHideForces" class="force-mode-btn" style="min-width:142px">
-          <svg class="shf-icon" viewBox="0 0 14 52" width="14" height="52" aria-hidden="true">
-            <circle cx="7" cy="7"  r="6" fill="currentColor"/>
-            <line  x1="7" y1="7" x2="7" y2="45" stroke="currentColor" stroke-width="2"/>
-            <circle cx="7" cy="45" r="6" fill="currentColor"/>
-          </svg>
-          <span class="shf-label">Show forces</span>
-        </button>
+        <button id="showHideForces" class="force-mode-btn" style="min-width:142px">Show forces</button>
         <div id="forceModeOptions" style="display:none;gap:6px;margin-top:2px">
           <div id="forceModeSelCols" style="display:flex;flex-direction:column;gap:4px">
             <button class="force-mode-btn active" data-selmode="single">One</button>
@@ -2216,8 +2201,7 @@ function setForceModeActive(mode) {
   // Show/Hide toggle label
   const shBtn = document.getElementById('showHideForces');
   if (shBtn) {
-    const shLbl = shBtn.querySelector('.shf-label');
-    (shLbl || shBtn).textContent = arrowMode > 0 ? 'Hide forces' : 'Show forces';
+    shBtn.textContent = arrowMode > 0 ? 'Hide forces' : 'Show forces';
     shBtn.classList.toggle('active', arrowMode > 0);
     shBtn.classList.toggle('show-forces-large', arrowMode === 0);
   }
