@@ -1044,8 +1044,8 @@
         <button id="showHideForces" class="force-mode-btn" style="min-width:142px">Show forces</button>
         <div id="forceModeOptions" style="display:none;gap:6px;margin-top:2px">
           <div id="forceModeSelCols" style="display:flex;flex-direction:column;gap:4px">
-            <button class="force-mode-btn active" data-selmode="single">One</button>
-            <button class="force-mode-btn" data-selmode="group">Group</button>
+            <button class="force-mode-btn active" data-selmode="single">One Particle</button>
+            <button class="force-mode-btn" data-selmode="group">Particle Group</button>
           </div>
           <div id="forceModeModeCols" style="display:flex;flex-direction:column;gap:4px">
             <button class="force-mode-btn" data-mode="1">All Forces</button>
@@ -2022,8 +2022,8 @@ function applyTab(tab) {
     opts.style.flexDirection = '';
     opts.style.width = '';
     document.getElementById('showHideForces').classList.toggle('show-forces-large', arrowMode === 0);
-    document.querySelector('.force-mode-btn[data-mode="1"]').textContent = 'All';
-    document.querySelector('.force-mode-btn[data-mode="2"]').textContent = 'Total';
+    document.querySelector('.force-mode-btn[data-mode="1"]').textContent = 'All Forces';
+    document.querySelector('.force-mode-btn[data-mode="2"]').textContent = 'Total Force';
   }
   // Clear sim + playback state on tab switch. resetSim() also clears
   // particleHistory + timeSlider (issue #34) and the replaying flag (#35).
